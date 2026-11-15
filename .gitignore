@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Local secrets and tools
+.env
+.env.*
+!.env.example
+.DS_Store
+.vscode/
+
+# Large scientific source data; download separately from official USGS
+*.tif
+*.tiff
+*.img
+*.tif.part
+*.tiff.part
+*.img.part
