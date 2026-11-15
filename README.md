@@ -95,6 +95,42 @@ You can also check:
 
 A successful status check only shows that a file was detected; a successful elevation request confirms that the server processed terrain data.
 
+## Static GitHub Pages deployment
+
+The root [index.html](index.html) redirects to the interactive application. GitHub Pages serves the frontend only; it does not execute the Python backend. A real terrain-dependent route requires a loaded Mars DEM. The app does not substitute invented heights when DEM coverage is unavailable.
+
+Enable GitHub Pages under **Settings → Pages → Deploy from a branch → main / (root)** after merging.
+
+### Reproducible Jezero elevations
+
+After installing Python dependencies, obtain a suitable Jezero GeoTIFF from the official USGS Mars 2020 mapping products (CTX or HiRISE). The repository does not include these large source datasets.
+
+```powershell
+# Use a previously downloaded Mars GeoTIFF (recommended for reliable sourcing)
+python scripts/prepare_dem.py --input 'C:\path\to\jezero_dem.tif' --export-json
+
+# Alternatively request a USGS CTX product automatically (remote URL may change)
+python scripts/prepare_dem.py --download ctx --export-json
+```
+
+The utility validates the Martian CRS and exports `jezero_dem_precomputed.json` from **actual sampled elevations** using the Python DEM endpoint's processing logic. It defaults to a 220×220 subset near Jezero's sample route. Review coverage, source provenance, source permissions, and grid resolution before committing the resulting JSON for GitHub Pages. No actual DEM export is included in this commit.
+
+For the local backend, set `MARS_DEM_PATH` to the downloaded GeoTIFF and run `python mars_dem_server.py`. The static 220×220 grid is only a coarse planning representation; it cannot prove subcell obstacles are absent.
+
+## Automated regression tests
+
+Tests use a tiny **synthetic test-only raster** to validate DEM handling and error responses. No test heights are represented as measured Martian terrain.
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+[GitHub Actions](.github/workflows/verify.yml) runs tests on pushes and pull requests. Passing these checks does not certify EVA safety.
+
+## Licensing
+
+See [LICENSE](LICENSE). The repository is public but not open-source licensed; rights for third-party imagery, terrain datasets, dependencies and other external materials remain with their respective owners.
+
 ## Repository files
 
 | File | Description |
@@ -104,6 +140,11 @@ A successful status check only shows that a file was detected; a successful elev
 | `catalog_store.py` | Local mission-evidence catalog logic |
 | `catalog.sqlite` | Included local catalog database |
 | `requirements.txt` | Python packages needed to run the backend |
+| `index.html` | Static GitHub Pages entry point |
+| `scripts/prepare_dem.py` | Local official DEM preparation/export |
+| `tests/test_project.py` | Regression tests |
+| `.github/workflows/verify.yml` | Automated verification |
+| `LICENSE` | Copyright notice |
 
 The local catalog database is included. If that database is removed, the server may require a separate `catalog_seed.json` file to rebuild the catalog; that seed file is not currently published in this repository.
 
