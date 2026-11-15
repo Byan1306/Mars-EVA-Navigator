@@ -1,0 +1,3602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MARS EVA NAVIGATOR — Guía de Supervivencia Interplanetaria: Mapa de Marte (NASA Space Apps 2026)</title>
+
+  <!-- Leaflet 1.9.4: Cartografía planetaria global en proyección EPSG:4326 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- GeoTIFF.js 2.1.3: Lectura directa de elevaciones reales desde archivos .tif / .tiff -->
+  <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+
+  <style>
+    :root {
+      --bg-app: #060a12;
+      --bg-panel: #0c1320;
+      --bg-card: #111b2e;
+      --bg-card-hover: #16243d;
+      --border: #1e2e4a;
+      --border-hi: #324d7a;
+      --text-main: #edf3ff;
+      --text-muted: #93a7c9;
+      --text-dim: #62779c;
+      --cyan: #00d2ff;
+      --blue: #1a6dff;
+      --green: #10b981;
+      --route-blue: #3b82f6;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --purple: #a855f7;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-app);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* ==================== CABECERA NASA / JPL ==================== */
+    header.topbar {
+      background: linear-gradient(90deg, #080e1a 0%, #0f1a2e 50%, #080e1a 100%);
+      border-bottom: 1px solid var(--border-hi);
+      padding: 0.55rem 1.1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      z-index: 1000;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+    }
+
+    .nasa-badge {
+      background: linear-gradient(135deg, var(--blue), #0a3c99);
+      border: 1px solid var(--cyan);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.3rem 0.58rem;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+      box-shadow: 0 0 12px rgba(0, 210, 255, 0.22);
+    }
+
+    .brand h1 {
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .brand p {
+      font-size: 0.69rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    /* Selector de Modo de Pantalla (Hábitat / Tableta Campo / HUD Casco) */
+    .formfactor-switch {
+      display: inline-flex;
+      background: #070c16;
+      border: 1px solid var(--border-hi);
+      border-radius: 7px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .ff-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 0.3rem 0.55rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.14s ease;
+    }
+
+    .ff-btn.active {
+      background: rgba(0, 210, 255, 0.18);
+      color: #fff;
+      box-shadow: inset 0 0 0 1px var(--cyan);
+    }
+
+    .header-status {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      padding: 0.28rem 0.55rem;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.38rem;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+    .dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+    .dot.red   { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+    .pano-btn {
+      background: linear-gradient(135deg, #102544, #173866);
+      border: 1px solid var(--cyan);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.38rem 0.78rem;
+      border-radius: 7px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.16s ease;
+    }
+
+    .pano-btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, #17345e, #204c8a);
+      box-shadow: 0 0 12px rgba(0, 210, 255, 0.25);
+    }
+
+    .pano-btn:disabled {
+      background: #0e1522;
+      border-color: var(--border);
+      color: var(--text-dim);
+      cursor: not-allowed;
+      opacity: 0.78;
+    }
+
+    /* ==================== CONTENEDOR PRINCIPAL ==================== */
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 430px 1fr;
+      gap: 0.8rem;
+      padding: 0.8rem;
+      max-width: 1840px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    body.mode-tablet .workspace {
+      grid-template-columns: 375px 1fr;
+    }
+
+    body.mode-hud .workspace {
+      grid-template-columns: 340px 1fr;
+    }
+
+    @media (max-width: 1100px) {
+      .workspace { grid-template-columns: 1fr !important; }
+    }
+
+    /* ==================== BARRA LATERAL ==================== */
+    aside.sidebar {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.72rem;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+      max-height: calc(100vh - 74px);
+      overflow-y: auto;
+    }
+
+    @media (max-width: 1100px) {
+      aside.sidebar { max-height: none; }
+    }
+
+    .sec-title {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--cyan);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 0.6rem 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .click-mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.38rem;
+    }
+
+    .mode-pill {
+      background: #0a101c;
+      border: 1px solid var(--border-hi);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 0.36rem 0.42rem;
+      font-size: 0.71rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.14s ease;
+    }
+
+    .mode-pill.active-dest {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: var(--red);
+      color: #fff;
+    }
+
+    .mode-pill.active-orig {
+      background: rgba(16, 185, 129, 0.16);
+      border-color: var(--green);
+      color: #fff;
+    }
+
+    .ctrl-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.22rem;
+    }
+
+    .ctrl-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.73rem;
+      color: var(--text-muted);
+    }
+
+    .ctrl-row label strong {
+      font-family: var(--font-mono);
+      color: var(--cyan);
+    }
+
+    select, input[type="range"], input[type="file"], button.mini-btn {
+      width: 100%;
+      background: #0a101c;
+      border: 1px solid var(--border-hi);
+      color: var(--text-main);
+      border-radius: 6px;
+      padding: 0.38rem 0.5rem;
+      font-size: 0.74rem;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+
+    input[type="range"] {
+      padding: 0.18rem 0;
+      accent-color: var(--cyan);
+      cursor: pointer;
+    }
+
+    button.mini-btn {
+      cursor: pointer;
+      font-weight: 600;
+      background: #13223b;
+      transition: background 0.15s ease;
+    }
+    button.mini-btn:hover {
+      background: #1a2f52;
+      border-color: var(--cyan);
+    }
+
+    /* Checkboxes de Capas Científicas Superpuestas */
+    .layers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.32rem;
+    }
+
+    .layer-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: #0a101c;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 0.3rem 0.42rem;
+      font-size: 0.69rem;
+      color: var(--text-main);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .layer-toggle input {
+      accent-color: var(--cyan);
+      cursor: pointer;
+    }
+
+    .dem-source-tag {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      padding: 0.3rem 0.48rem;
+      border-radius: 5px;
+      background: rgba(0, 210, 255, 0.08);
+      border: 1px solid rgba(0, 210, 255, 0.3);
+      color: var(--cyan);
+      line-height: 1.32;
+    }
+
+    .dem-source-tag.tif-active {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: var(--green);
+      color: #6ee7b7;
+    }
+
+    /* Tarjetas de Rutas */
+    .routes-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .route-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 8px;
+      padding: 0.52rem 0.64rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .route-card:hover { background: var(--bg-card-hover); }
+    .route-card.selected {
+      box-shadow: 0 0 0 1px var(--cyan);
+      background: #15243e;
+    }
+    .route-card.green { border-left-color: var(--green); }
+    .route-card.blue  { border-left-color: var(--route-blue); }
+    .route-card.red   { border-left-color: var(--red); }
+
+    .route-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.36rem;
+    }
+
+    .route-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .route-tag {
+      font-family: var(--font-mono);
+      font-size: 0.63rem;
+      padding: 0.1rem 0.36rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .green .route-tag { background: rgba(16, 185, 129, 0.16); color: var(--green); }
+    .blue .route-tag  { background: rgba(59, 130, 246, 0.16); color: var(--route-blue); }
+    .red .route-tag   { background: rgba(239, 68, 68, 0.16); color: var(--red); }
+
+    .metrics-6 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.22rem;
+      font-family: var(--font-mono);
+    }
+
+    .m-cell {
+      background: rgba(6, 10, 18, 0.65);
+      border-radius: 4px;
+      padding: 0.22rem 0.18rem;
+      text-align: center;
+    }
+
+    .m-cell span {
+      display: block;
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .m-cell strong {
+      display: block;
+      font-size: 0.66rem;
+      color: #fff;
+      margin-top: 0.05rem;
+    }
+
+    /* Panel Detallado de Evaluación del prototipo */
+    .validation-box {
+      background: #0a101b;
+      border: 1px solid var(--border-hi);
+      border-radius: 8px;
+      padding: 0.58rem 0.68rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.44rem;
+    }
+
+    .val-item {
+      border-left: 2px solid var(--border-hi);
+      padding-left: 0.5rem;
+      font-size: 0.72rem;
+      line-height: 1.38;
+    }
+
+    .val-item.ok   { border-left-color: var(--green); }
+    .val-item.warn { border-left-color: var(--amber); }
+    .val-item.crit { border-left-color: var(--red); }
+
+    .val-item strong.val-head {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.67rem;
+      color: var(--cyan);
+      margin-bottom: 0.1rem;
+    }
+
+    .val-item p {
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    /* SVG Elevación Interactivo */
+    .svg-box svg {
+      width: 100%;
+      height: 112px;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* ==================== VIEWPORT MAPA / PANORAMA ==================== */
+    section.viewport {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.72rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+      min-height: 640px;
+    }
+
+    .vp-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .vp-header h2 {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .coords-badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-hi);
+      padding: 0.24rem 0.55rem;
+      border-radius: 6px;
+    }
+
+    .stage {
+      position: relative;
+      flex: 1;
+      min-height: 560px;
+      border-radius: 9px;
+      overflow: hidden;
+      border: 1px solid var(--border-hi);
+      background: #04070d;
+    }
+
+    #mars-map {
+      width: 100%;
+      height: 100%;
+      min-height: 560px;
+      background: #04070d;
+      z-index: 1;
+    }
+
+    /* Superposición HUD Visera de Casco EVA sobre el Viewport */
+    #helmet-hud-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 500;
+      pointer-events: none;
+      display: none;
+      box-shadow: inset 0 0 85px rgba(0, 210, 255, 0.18), inset 0 0 140px rgba(2, 6, 14, 0.85);
+      border: 2px solid rgba(0, 210, 255, 0.35);
+      border-radius: 9px;
+      padding: 0.75rem;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    body.mode-hud #helmet-hud-overlay {
+      display: flex;
+    }
+
+    .hud-visor-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+    }
+
+    .hud-chip {
+      background: rgba(5, 12, 24, 0.82);
+      border: 1px solid rgba(0, 210, 255, 0.45);
+      color: #7dd3fc;
+      padding: 0.28rem 0.55rem;
+      border-radius: 5px;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Barra de Simulación de Ejecución EVA en Vivo */
+    #eva-sim-telemetry {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 520;
+      background: rgba(8, 15, 28, 0.92);
+      border: 1px solid var(--cyan);
+      border-radius: 8px;
+      padding: 0.48rem 0.7rem;
+      display: none;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.69rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+    }
+
+    .leaflet-control-layers, .leaflet-bar a {
+      background: rgba(12, 19, 32, 0.92) !important;
+      color: var(--text-main) !important;
+      border-color: var(--border-hi) !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(6, 10, 18, 0.86) !important;
+      color: var(--text-muted) !important;
+      font-size: 0.62rem !important;
+    }
+    .leaflet-control-attribution a { color: var(--cyan) !important; }
+
+    /* Visor Panorámico Real NASA Mars 2020 / Curiosity */
+    #real-pano-viewer {
+      position: absolute;
+      inset: 0;
+      display: none;
+      z-index: 700;
+      background: #05080f;
+      flex-direction: column;
+    }
+
+    .pano-canvas-wrap {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #03050a;
+    }
+
+    .pano-canvas-wrap:active { cursor: grabbing; }
+
+    #real-nasa-photo {
+      height: 100%;
+      min-width: 145%;
+      object-fit: cover;
+      user-select: none;
+      pointer-events: none;
+      transition: transform 0.06s linear;
+    }
+
+    .pano-overlay-hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 0.85rem;
+      box-shadow: inset 0 0 65px rgba(0, 0, 0, 0.82);
+    }
+
+    .pano-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .hud-tag {
+      background: rgba(6, 10, 18, 0.88);
+      border: 1px solid rgba(0, 210, 255, 0.45);
+      border-radius: 6px;
+      padding: 0.35rem 0.65rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--cyan);
+      pointer-events: auto;
+    }
+
+    .pano-nav-btns {
+      display: flex;
+      gap: 0.4rem;
+      pointer-events: auto;
+    }
+
+    .pano-nav-btns button {
+      background: rgba(12, 19, 32, 0.92);
+      border: 1px solid var(--cyan);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 0.69rem;
+      padding: 0.3rem 0.58rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .vp-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .legend-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.32rem;
+    }
+
+    .line-swatch {
+      width: 14px;
+      height: 4px;
+      border-radius: 2px;
+    }
+
+    .mars-pin {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2.5px solid #fff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.85);
+    }
+    .mars-pin.orig { background: var(--green); }
+    .mars-pin.dest { background: var(--red); }
+    .mars-pin.walker {
+      background: var(--cyan);
+      box-shadow: 0 0 14px var(--cyan);
+    }
+    [hidden] { display: none !important; }
+    .section-nav { display:flex; gap:10px; padding:10px 18px; align-items:center; flex-wrap:wrap; background:#0c1320; border-bottom:1px solid #324d7a; }
+    .section-nav button[aria-pressed="true"] { border-color:#00d2ff; background:#17364b; color:#fff; }
+    #section-caption { font-size:12px; color:#93a7c9; }
+    #jezero-brief { border-color:#00d2ff; }
+    #jezero-brief h2 { font-size:18px; }
+    #jezero-brief p, details.card-block p, #mission-summary { font-size:12px; line-height:1.6; margin:8px 0; }
+    #jezero-brief label { display:block; font-size:12px; margin:8px 0; }
+    #jezero-brief input { width:85px; padding:5px; }
+    #evidence-panel {position:fixed;inset:16px;z-index:5000;overflow:auto;background:#0c1320;padding:24px;border:1px solid #00d2ff;border-radius:14px;box-shadow:0 20px 90px #000;}
+    #evidence-panel h2,#evidence-panel h3 {margin:16px 0 8px;}
+    #evidence-panel p {font-size:13px;line-height:1.6;margin:10px 0;}
+    #evidence-canvas {width:100%;height:auto;background:#080e1a;border-radius:10px;}
+    #evidence-photo {max-width:100%;max-height:350px;object-fit:contain;}
+    #evidence-panel td,#evidence-panel th {padding:10px;border-bottom:1px solid #324d7a;text-align:left;font-size:12px;}
+    #evidence-panel a {color:#00d2ff;}
+  </style>
+</head>
+<body>
+
+  <section id="evidence-panel" hidden role="dialog" aria-modal="true" aria-label="Mission Evidence Mode">
+    <button id="close-evidence" class="mini-btn">Cerrar y volver al mapa</button>
+    <h2>Mission Evidence Mode</h2><p id="evidence-region"></p>
+    <canvas id="evidence-canvas" width="1100" height="560" aria-label="Relieve tridimensional derivado del DEM"></canvas>
+    <label>Rotación <input id="evidence-angle" type="range" min="0" max="360" value="35"></label>
+    <p>Escala vertical 1× · proyección 3D ortográfica · pendientes: azul ≤12,5°, ocre ≤24°, rojo >24°. Ruta y marcadores superpuestos visibles a través del relieve. Malla visual reducida; el cálculo de rutas conserva su resolución.</p>
+    <label>Zoom <input id="evidence-zoom" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+    <label>Inclinación <input id="evidence-tilt" type="range" min="0" max="90" value="33"></label>
+    <label>Desplazamiento X <input id="evidence-pan-x" type="range" min="-400" max="400" value="0"></label>
+    <label>Y <input id="evidence-pan-y" type="range" min="-250" max="250" value="0"></label>
+    <label><input type="checkbox" id="evidence-all-routes"> Mostrar las tres rutas</label>
+    <button id="evidence-overview">Vista general</button><button id="evidence-top">Vista topográfica</button>
+    <h3>Photo Explorer · catálogo documentado</h3>
+    <button id="catalog-load">Cargar catálogo de esta región</button>
+    <label>Radio desde astronauta/origen (m) <input id="photo-radius" type="number" min="1" max="100000" value="1000"></label>
+    <button id="photos-near">Fotos georreferenciadas cercanas</button>
+    <p id="catalog-status" role="status">A: posición documentada; B: evidencia regional; C: contexto sin posición. La validación del formato no certifica la geolocalización.</p>
+    <div id="photo-cards"></div>
+    <h3>Historial del rover</h3><select id="history-station" aria-label="Estación documentada"></select><button id="history-center">Centrar estación</button><button id="history-next">Siguiente sol documentado</button><p id="history-status">Sin posiciones documentadas importadas. No se interpola un recorrido histórico.</p>
+    <h3>EVA Guardian · ejercicio de retorno</h3>
+    <label>Tiempo restante (min) <input id="guardian-budget" type="number" min="0" value="120"></label>
+    <label>Escenario <select id="guardian-scenario"><option value="normal">Retorno normal</option><option value="slow">Movilidad reducida: tiempo × 2 (supuesto)</option><option value="blocked">Zona bloqueada hipotética en punto medio del retorno</option></select></label>
+    <label>Radio de bloqueo hipotético (m) <input id="guardian-radius" type="number" min="0" max="10000" value="30"></label><button id="guardian-follow">Animar retorno calculado</button>
+    <button id="guardian-run">Pausar EVA y calcular retorno</button><p id="guardian-result" role="status">Modelo educativo, sin certificación para una EVA real.</p>
+    <h3>Science Hunter · recorrido con retorno</h3>
+    <p>Objetivos A importados: localización documentada. Un destino añadido manualmente es una propuesta hipotética, no un descubrimiento NASA. Máximo 5 objetivos.</p>
+    <button id="hunter-add">Añadir destino actual como objetivo hipotético</button><button id="hunter-clear">Vaciar objetivos</button>
+    <label>Tiempo científico por parada (min) <input id="hunter-dwell" type="number" min="0" value="10"></label>
+    <label>Presupuesto total (min) <input id="hunter-budget" type="number" min="0" value="240"></label>
+    <button id="hunter-run">Planificar visitas y regreso</button><p id="hunter-targets"></p><p id="hunter-result" role="status"></p>
+    <h3>Evidencia fotográfica</h3><img id="evidence-photo" alt="" loading="lazy"><p id="evidence-photo-status"></p>
+    <a id="evidence-source" target="_blank" rel="noopener">Abrir ficha original NASA</a>
+    <h3>Objetivos científicos y waypoints propuestos</h3><p id="evidence-objectives"></p>
+    <h3>Procedencia</h3><div style="overflow:auto"><table><thead><tr><th>Capa</th><th>Fuente</th><th>Misión</th><th>Instrumento</th><th>Tipo</th><th>Clasificación</th></tr></thead><tbody id="evidence-provenance"></tbody></table></div>
+  </section>
+  <!-- CABECERA TÉCNICA -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="nasa-badge">NASA SPACE APPS 2026</div>
+      <div>
+        <h1>MARS EVA NAVIGATOR — Guía de Supervivencia Interplanetaria</h1>
+        <p>Mapa Hiperlocalizado por Capas • Mars Trek WMTS (EPSG:4326) • Jezero &amp; Monte Sharp (Curiosity 2025)</p>
+      </div>
+    </div>
+
+    <!-- Selector de Formato de Pantalla del Enunciado -->
+    <div class="formfactor-switch" role="group" aria-label="Formato de visualización EVA">
+      <button class="ff-btn active" data-ff="habitat" type="button">🖥️ Consola Hábitat</button>
+      <button class="ff-btn" data-ff="tablet" type="button">📱 Tableta Campo</button>
+      <button class="ff-btn" data-ff="hud" type="button">🥽 HUD Casco</button>
+    </div>
+
+    <div class="header-status">
+      <div class="pill">
+        <span class="dot" id="hdr-dem-dot"></span>
+        <span id="hdr-dem-label">DEM: Inicializando...</span>
+      </div>
+      <div class="pill">
+        <span class="dot" id="hdr-rad-dot"></span>
+        <span id="hdr-rad-label">RAD: 0,64 mSv/d</span>
+      </div>
+      <button class="pano-btn" id="btn-pano-toggle" disabled title="Disponible junto a estaciones científicas verificadas de Perseverance o Curiosity">
+        <span id="pano-btn-text">Sin fotos reales en esta zona</span>
+      </button>
+    </div>
+  </header>
+
+  <nav class="section-nav" aria-label="Apartados del proyecto">
+    <button id="tab-explorer" class="mini-btn" aria-pressed="true">Explorador de Marte · 2D</button>
+    <button id="tab-jezero" class="mini-btn" aria-pressed="false">Misión Jezero · 2D</button>
+    <span id="section-caption">Exploración general · escenarios demostrativos</span>
+  </nav>
+  <!-- ESPACIO PRINCIPAL -->
+  <main class="workspace">
+
+    <!-- BARRA LATERAL -->
+    <aside class="sidebar">
+      <button id="open-evidence" class="mini-btn" type="button">Mission Evidence Mode · relieve 3D y fuentes</button>
+      <section id="jezero-brief" class="card-block" hidden>
+        <h2>Misión Jezero</h2>
+        <p>Reconocimiento del entorno del delta: comparar accesos y seleccionar un punto de observación. Base y destino son propuestas hipotéticas; no son instalaciones humanas existentes.</p>
+        <p>1. Carga el DEM. 2. Ajusta base y objetivo dentro de su cobertura. 3. Compara ida y regreso.</p>
+        <label>Presupuesto de tiempo (min) <input id="mission-budget" type="number" min="30" max="1440" value="480"></label>
+        <label>Trabajo científico en destino (min) <input id="mission-science" type="number" min="0" max="600" value="30"></label>
+        <p>Reserva de planificación: 20% del tiempo total. No equivale a autonomía certificada del traje.</p>
+        <p id="mission-status" role="status" aria-live="polite">Carga el DEM para planificar.</p>
+        <div id="mission-summary" aria-live="polite"></div>
+        <button id="mission-fit" class="mini-btn">Ver cobertura del DEM</button>
+      </section>
+      <div class="card-block">
+        <p id="route-search-status" role="status" aria-live="polite">Selecciona dos puntos y carga el DEM.</p>
+        <label style="font-size:12px"><input type="checkbox" id="allow-demo-terrain"> Permitir demostración con terreno inventado (solo Explorador)</label>
+        <p style="font-size:11px;color:#fbbf24">La ruta verde minimiza el riesgo del modelo. No certifica seguridad humana ni detecta obstáculos menores que el DEM.</p>
+        <button class="mini-btn" id="btn-nearby-safe">Ajustar ambos puntos a terreno permitido (≤500 m)</button>
+      </div>
+      <details class="card-block"><summary>Datos y límites del prototipo</summary>
+        <p>Mapa base: imágenes de Mars Trek. Elevación: GeoTIFF aportado por el equipo, cuando está disponible. Pendiente, rugosidad y apertura de cielo: derivados de ese mismo DEM.</p>
+        <p>Polígonos geológicos y trazas: ilustraciones manuales, no productos científicos importados. Tiempo, energía, consumibles y tasas de radiación: modelos exploratorios sin validación operacional.</p>
+        <p>La ruta verde minimiza primero el mayor riesgo geométrico y luego el coste acumulado, dentro de la malla y el límite supuesto de 12,5°. Ese límite es configurable en el código y no un estándar validado para astronautas. Azul: 18,5°; roja: 24°. No garantizamos detección de rocas ni riesgos menores que una celda.</p>
+        <p>Las fotos son contexto regional; no garantizan la vista exacta de un punto de la ruta. La consulta DONKI muestra un catálogo histórico, no una alerta local en Marte.</p>
+      </details>
+
+      <!-- 1. UBICACIÓN, OBJETIVOS CIENTÍFICOS Y SIMULACIÓN EVA -->
+      <div class="sec-title">
+        <span>1. Destino Científico &amp; Ejecución EVA</span>
+        <span id="dist-az-summary" style="color: var(--text-muted);">—</span>
+      </div>
+
+      <div class="card-block">
+        <select id="sel-site-preset" aria-label="Sitios científicos de Marte">
+          <option value="jezero_butler">Cráter Jezero — Perseverance (Van Zyl → Delta Scarp)</option>
+          <option value="gale_boxwork">Monte Sharp (Gale) — Formaciones de Retículas (Curiosity 2025)</option>
+          <option value="olympus_mons">Monte Olimpo (Planicie Basal → Escarpe Aureole)</option>
+          <option value="valles_marineris">Valles Marineris (Meseta Norte → Coprates Chasma)</option>
+          <option value="atacama_analog">Análogo Terrestre — Desierto de Atacama (Meteomatics)</option>
+          <option value="mauna_loa_analog">Análogo Terrestre — Mauna Loa HI-SEAS (Meteomatics)</option>
+        </select>
+
+        <div class="click-mode-grid">
+          <button class="mode-pill active-dest" id="btn-mode-dest">Clic Mapa: Fijar Destino</button>
+          <button class="mode-pill" id="btn-mode-orig">Clic Mapa: Mover Origen</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 0.38rem;">
+          <button class="mini-btn" id="btn-sim-eva" type="button" style="border-color: var(--green); color: #6ee7b7;">
+            ▶ Simular recorrido de ida
+          </button>
+          <button class="mini-btn" id="btn-export-geojson" type="button" style="border-color: var(--cyan); color: var(--cyan);">
+            Exportar GeoJSON
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. VISTA INTEGRADA POR CAPAS CIENTÍFICAS HIPERLOCALIZADAS -->
+      <div class="sec-title">
+        <span>2. Capas Científicas Superpuestas</span>
+        <span style="color: var(--text-dim);">Multi-Misión</span>
+      </div>
+
+      <div class="card-block">
+        <div class="layers-grid">
+          <label class="layer-toggle" title="Unidades geológicas y formaciones de retículas (Boxwork) / carbonatos">
+            <input type="checkbox" id="chk-layer-mineral" />
+            <span>🧪 Geología ilustrativa</span>
+          </label>
+          <label class="layer-toggle" title="Zonas de pendiente >14° y obstáculos rocosos">
+            <input type="checkbox" id="chk-layer-hazard" checked />
+            <span>⛰️ Pendientes del DEM</span>
+          </label>
+          <label class="layer-toggle" title="Refugios topográficos naturales con bajo factor de apertura de cielo Ωc">
+            <input type="checkbox" id="chk-layer-shield" checked />
+            <span>◉ Apertura de cielo</span>
+          </label>
+          <label class="layer-toggle" title="Isócrona de Punto de No Retorno según autonomía PLSS y carga">
+            <input type="checkbox" id="chk-layer-pnr" />
+            <span>⭕ Radio ilustrativo</span>
+          </label>
+        </div>
+
+        <div class="dem-source-tag" id="dem-source-banner">
+          FUENTE DEM: Pendiente de carga; exploración sintética si falta el archivo.
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.38rem;">
+          <button class="mini-btn" id="btn-connect-tif" type="button">Conectar .TIF</button>
+          <label class="mini-btn" style="text-align:center; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+            <span>Abrir .TIF Local</span>
+            <input type="file" id="input-local-tif" accept=".tif,.tiff" style="display:none;" />
+          </label>
+        </div>
+        <div id="tif-status-detail" style="font-family: var(--font-mono); font-size: 0.64rem; color: var(--text-dim); line-height: 1.3;">
+          Soporta backend Python (localhost:8000), jezero_dem_precomputed.json o GeoTIFF directo.
+        </div>
+      </div>
+
+      <!-- 3. TRIPULACIÓN, EQUIPO CIENTÍFICO Y CONDICIONES AMBIENTALES -->
+      <div class="sec-title">
+        <span>3. Tripulación, Equipo &amp; Entorno</span>
+        <span id="grid-res-badge" style="color: var(--text-muted);">110×110</span>
+      </div>
+
+      <div class="card-block">
+        <div class="ctrl-row">
+          <label for="ctrl-crew">
+            <span>Configuración Tripulación &amp; Apoyo Robótico</span>
+            <strong id="lbl-crew">Pareja + Rover</strong>
+          </label>
+          <select id="ctrl-crew">
+            <option value="pair_rover">Pareja Astronautas (EVA-1/2) + Rover Apoyo (Carga asistida)</option>
+            <option value="pair_foot">Pareja Astronautas a Pie (Equipo científico compartido)</option>
+            <option value="solo_foot">Astronauta Individual (Mochila geológica 28 kg)</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row">
+          <label for="ctrl-solar">
+            <span>Clima Espacial (NASA DONKI / MSL RAD)</span>
+            <strong id="lbl-solar">0,64 mSv/d</strong>
+          </label>
+          <select id="ctrl-solar">
+            <option value="nominal">Tranquilo — GCR basal (0,64 mSv/día)</option>
+            <option value="sep_2017">Tormenta SEP Sept 2017 — Protones &gt;150 MeV (1,28 mSv/día)</option>
+            <option value="flare_x18">Fulguración X1.8 — Evento Solar Activo (1,65 mSv/día)</option>
+          </select>
+          <button class="mini-btn" id="btn-fetch-donki" type="button" style="margin-top:0.18rem; border-color:var(--amber); color:#fcd34d;">
+            Consultar NASA DONKI en Vivo (SEP / FLR)
+          </button>
+          <div id="donki-live-status" style="font-family:var(--font-mono); font-size:0.63rem; color:var(--text-dim); line-height:1.28;">
+            DONKI disponible para consulta • Eventos solares del catálogo; no es una medición local en Marte.
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem;">
+          <div class="ctrl-row">
+            <label for="ctrl-ls"><span>Estación (Ls)</span><strong id="lbl-ls">Ls 90°</strong></label>
+            <select id="ctrl-ls">
+              <option value="ls_90">Ls 90° Afelio (-58°C)</option>
+              <option value="ls_210">Ls 210° Polvo (-34°C)</option>
+              <option value="ls_330">Ls 330° Perihelio (-22°C)</option>
+            </select>
+          </div>
+          <div class="ctrl-row">
+            <label for="ctrl-ltst"><span>Hora (LTST)</span><strong id="lbl-ltst">16:00</strong></label>
+            <select id="ctrl-ltst">
+              <option value="1600">16:00 Óptima (τ 0,35)</option>
+              <option value="0700">07:00 Nubes (τ 0,85)</option>
+              <option value="dust_storm">Tormenta (τ 1,85)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <label for="ctrl-mass">
+            <span>Masa Total Astronauta + Traje + Instrumentos</span>
+            <strong id="lbl-mass">165 kg</strong>
+          </label>
+          <input type="range" id="ctrl-mass" min="130" max="210" step="5" value="165" />
+        </div>
+
+        <!-- Conector Meteomatics exclusivo para Sitios Análogos Terrestres -->
+        <div id="meteomatics-analog-box" style="display:none; border-top:1px solid var(--border); padding-top:0.4rem; flex-direction:column; gap:0.32rem;">
+          <div style="font-family:var(--font-mono); font-size:0.65rem; color:#38bdf8;">
+            API METEOMATICS (Entrenamiento Análogo Terrestre)
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.32rem;">
+            <input hidden disabled type="text" id="mm-user" placeholder="Usuario Meteomatics" style="background:#0a101c; border:1px solid var(--border-hi); color:#fff; border-radius:5px; padding:0.28rem 0.42rem; font-size:0.68rem;" />
+            <input hidden disabled type="password" id="mm-pass" placeholder="Contraseña" style="background:#0a101c; border:1px solid var(--border-hi); color:#fff; border-radius:5px; padding:0.28rem 0.42rem; font-size:0.68rem;" />
+          </div>
+          <button class="mini-btn" id="btn-fetch-meteomatics" type="button">Consultar Clima Real Meteomatics</button>
+          <div id="mm-status" style="font-family:var(--font-mono); font-size:0.62rem; color:var(--text-muted);">
+            Mantiene separados los datos terrestres de los sensores marcianos MEDA/REMS.
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. COMPARATIVA DE LAS 3 RUTAS -->
+      <div class="sec-title">
+        <span>4. Rutas EVA (Verde / Azul / Roja)</span>
+        <span style="color: var(--text-dim);">Clic = Seleccionar</span>
+      </div>
+
+      <div class="routes-stack" id="routes-container"></div>
+
+      <!-- 5. VALIDACIÓN DE AFECTACIONES DE LA RUTA SELECCIONADA -->
+      <div class="sec-title">
+        <span id="val-panel-title">5. Evaluación del prototipo — Ruta Verde</span>
+      </div>
+
+      <div class="validation-box" id="validation-container">
+        <div class="val-item ok" id="val-topo">
+          <strong class="val-head">1. Afectación Topográfica &amp; Retorno Científico</strong>
+          <p>Calculando perfil sobre relieve marciano...</p>
+        </div>
+        <div class="val-item ok" id="val-bio">
+          <strong class="val-head">2. Afectación Bioenergética &amp; Consumibles (O₂ / H₂O)</strong>
+          <p>Calculando gasto estimado...</p>
+        </div>
+        <div class="val-item ok" id="val-rad">
+          <strong class="val-head">3. Dosis de escenario (no validada)</strong>
+          <p>Evaluando dosis equivalente...</p>
+        </div>
+        <div class="val-item ok" id="val-atmo">
+          <strong class="val-head">4. Afectación Atmosférica y Térmica (MEDA / REMS)</strong>
+          <p>Evaluando opacidad óptica τ...</p>
+        </div>
+      </div>
+
+      <!-- 6. PERFIL DE ELEVACIÓN INTERACTIVO SINCRONIZADO -->
+      <div class="card-block svg-box">
+        <div class="sec-title" style="border:none; padding:0;">
+          <span>Perfil Altimétrico Interactivo (m)</span>
+          <span id="elev-bounds-lbl" style="color: var(--text-muted); font-size: 0.64rem;">—</span>
+        </div>
+        <svg id="elev-profile-svg" viewBox="0 0 360 112" preserveAspectRatio="none" role="img" aria-label="Perfil de elevación comparativo"></svg>
+        <div id="elev-hover-readout" style="font-family:var(--font-mono); font-size:0.64rem; color:var(--text-muted);">
+          Pasa el cursor sobre el perfil para sincronizar posición y pendiente en el mapa.
+        </div>
+      </div>
+    </aside>
+
+    <!-- VIEWPORT PRINCIPAL: MAPA GLOBAL / VISOR PANORÁMICO REAL -->
+    <section class="viewport">
+      <div class="vp-header">
+        <h2 id="vp-title">Cartografía Global de Marte — NASA Mars Trek WMTS (EPSG:4326)</h2>
+        <div class="coords-badge" id="cursor-readout">18,4447° N, 77,4508° E</div>
+      </div>
+
+      <div class="stage">
+        <div id="mars-map"></div>
+
+        <!-- SUPERPOSICIÓN HUD VISERA DE CASCO EVA -->
+        <div id="helmet-hud-overlay">
+          <div class="hud-visor-bar">
+            <div class="hud-chip" id="hud-top-left">VISOR CASCO xEMU • CRÁTER JEZERO • Marte esférico R=3396190 m</div>
+            <div class="hud-chip" id="hud-top-center">AZIMUT: 285° ONO • PNR: OK</div>
+            <div class="hud-chip" id="hud-top-right">Consumibles: sin telemetría real • RAD: 0,64 mSv/d</div>
+          </div>
+          <div class="hud-visor-bar">
+            <div class="hud-chip" id="hud-bot-left">CAPAS ACTIVAS: ÓPTICA + TOPOGRAFÍA + MINERALOGÍA + RADIACIÓN</div>
+            <div class="hud-chip" id="hud-bot-right">TECLA [M]: VISTA PRIMERA PERSONA DE SUPERFICIE</div>
+          </div>
+        </div>
+
+        <!-- PANEL FLOTANTE DE SIMULACIÓN DE CAMINATA EVA EN TIEMPO REAL -->
+        <div id="eva-sim-telemetry">
+          <div id="sim-progress-txt" style="color:#fff;">
+            <strong>EVA EN CURSO:</strong> 0% • Dist: 0,00 km • O₂: 100% • Dosis: 0,000 mSv
+          </div>
+          <div style="display:flex; gap:0.4rem;">
+            <button id="btn-sim-storm" type="button" style="background:rgba(239,68,68,0.22); border:1px solid var(--red); color:#fca5a5; padding:0.25rem 0.5rem; border-radius:5px; font-family:var(--font-mono); font-size:0.67rem; cursor:pointer;">
+              ⚡ Simular escenario solar
+            </button>
+            <button id="btn-sim-stop" type="button" style="background:#13223b; border:1px solid var(--border-hi); color:#fff; padding:0.25rem 0.5rem; border-radius:5px; font-family:var(--font-mono); font-size:0.67rem; cursor:pointer;">
+              Detener
+            </button>
+          </div>
+        </div>
+
+        <!-- VISOR PANORÁMICO REAL EN PRIMERA PERSONA (PERSEVERANCE & CURIOSITY) -->
+        <div id="real-pano-viewer">
+          <div class="pano-canvas-wrap" id="pano-drag-area">
+            <img id="real-nasa-photo" alt="Fotografía real de superficie marciana capturada por rovers de la NASA" />
+            <div class="pano-overlay-hud">
+              <div class="pano-row">
+                <div class="hud-tag" id="pano-hud-site">SITIO VERIFICADO NASA</div>
+                <div class="hud-tag" id="pano-hud-camera">SOL — | CÁMARA —</div>
+              </div>
+              <div class="pano-row">
+                <div class="hud-tag" id="pano-hud-az">VISTA EN PRIMERA PERSONA • ARRASTRA HORIZONTALMENTE</div>
+                <div class="pano-nav-btns">
+                  <button id="btn-prev-photo" type="button">◀ Foto Anterior</button>
+                  <button id="btn-next-photo" type="button">Siguiente Foto ▶</button>
+                  <button id="btn-close-pano" type="button" style="border-color: var(--red); color: #fca5a5;">Cerrar Visor (M)</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="vp-footer">
+        <div class="legend-list">
+          <span class="legend-item"><span class="line-swatch" style="background: var(--green);"></span> Verde: Conservadora (θ ≤ 12,5°)</span>
+          <span class="legend-item"><span class="line-swatch" style="background: var(--route-blue);"></span> Azul: Equilibrada (modelo exploratorio)</span>
+          <span class="legend-item"><span class="line-swatch" style="background: var(--red);"></span> Roja: Prioridad tiempo</span>
+          <span class="legend-item"><span class="line-swatch" style="background: var(--purple);"></span> Polígonos: Unidades Mineralógicas</span>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 0.67rem;">
+          Clic en cualquier parte de Marte • Esfera IAU 2015 (R = 3.396.190 m)
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. CONSTANTES GEODÉSICAS DE MARTE Y SITIOS VERIFICADOS NASA (M2020 + MSL)
+    // =========================================================================
+    const MARS_RADIUS_M = 3396190.0;
+    const DEG_TO_RAD = Math.PI / 180.0;
+    const RAD_TO_DEG = 180.0 / Math.PI;
+    let GRID_N = 160;
+
+    // Estaciones reales verificadas con fotografías en primera persona de Perseverance (Jezero) y Curiosity (Monte Sharp)
+    const VERIFIED_ROVER_SITES = [
+      {
+        id: 'van_zyl',
+        rover: 'mars2020',
+        name: 'Van Zyl Overlook (Octavia E. Butler — Jezero)',
+        lat: 18.4447,
+        lon: 77.4508,
+        azimuthDeg: 285,
+        instrument: 'MCZ_LEFT',
+        fallbackPhoto: 'https://photojournal.jpl.nasa.gov/jpegMod/PIA24543_modest.jpg',
+        fallbackSol: 55
+      },
+      {
+        id: 'lac_de_charmes',
+        rover: 'mars2020',
+        name: 'Lac de Charmes / Séítah Sur (Jezero)',
+        lat: 18.4312,
+        lon: 77.4415,
+        azimuthDeg: 210,
+        instrument: 'NAVCAM_LEFT',
+        fallbackPhoto: 'https://photojournal.jpl.nasa.gov/jpegMod/PIA24760_modest.jpg',
+        fallbackSol: 162
+      },
+      {
+        id: 'delta_kodiak',
+        rover: 'mars2020',
+        name: 'Delta Scarp / Kodiak (Three Forks — Jezero)',
+        lat: 18.4589,
+        lon: 77.4036,
+        azimuthDeg: 312,
+        instrument: 'MCZ_RIGHT',
+        fallbackPhoto: 'https://photojournal.jpl.nasa.gov/jpegMod/PIA24836_modest.jpg',
+        fallbackSol: 235
+      },
+      {
+        id: 'arbot',
+        rover: 'mars2020',
+        name: 'Arbot — Borde del Delta Occidental (Jezero)',
+        lat: 18.4735,
+        lon: 77.3862,
+        azimuthDeg: 295,
+        instrument: 'NAVCAM_RIGHT',
+        fallbackPhoto: 'https://photojournal.jpl.nasa.gov/jpegMod/PIA25216_modest.jpg',
+        fallbackSol: 448
+      },
+      {
+        id: 'gale_boxwork_base',
+        rover: 'msl',
+        name: 'Base Formaciones de Retículas (Boxwork — Monte Sharp)',
+        lat: -4.7250,
+        lon: 137.8450,
+        azimuthDeg: 145,
+        instrument: 'MAST',
+        fallbackPhoto: 'https://photojournal.jpl.nasa.gov/jpegMod/PIA26442_modest.jpg',
+        fallbackSol: 4412
+      },
+      {
+        id: 'gale_boxwork_ridge',
+        rover: 'msl',
+        name: 'Cresta Poligonal Boxwork (Curiosity 2025 — Monte Sharp)',
+        lat: -4.7580,
+        lon: 137.8780,
+        azimuthDeg: 160,
+        instrument: 'MAST',
+        fallbackPhoto: 'https://photojournal.jpl.nasa.gov/jpegMod/PIA25915_modest.jpg',
+        fallbackSol: 4380
+      }
+    ];
+
+    const PRESETS = {
+      jezero_butler:    { orig: [18.4447, 77.4508], dest: [18.4589, 77.4036], zoom: 11, analog: false },
+      gale_boxwork:     { orig: [-4.7250, 137.8450], dest: [-4.7580, 137.8780], zoom: 11, analog: false },
+      olympus_mons:     { orig: [18.2000, -134.5000], dest: [18.7500, -133.7500], zoom: 8, analog: false },
+      valles_marineris: { orig: [-13.6500, -59.3500], dest: [-14.0500, -58.9500], zoom: 8, analog: false },
+      atacama_analog:   { orig: [-24.1000, -69.2500], dest: [-24.0650, -69.2100], zoom: 12, analog: true, name: 'Desierto de Atacama (Chile)' },
+      mauna_loa_analog: { orig: [19.5362, -155.5763], dest: [19.5620, -155.5450], zoom: 12, analog: true, name: 'Mauna Loa HI-SEAS (Hawái)' }
+    };
+
+    // Polígonos geológicos y mineralógicos hiperlocalizados (CRISM / SuperCam / ChemCam)
+    const MINERAL_ZONES = [
+      {
+        name: 'Unidad Deltaica de Carbonatos y Filosilicatos (Jezero)',
+        instrument: 'MRO CRISM + Perseverance SuperCam/PIXL',
+        scienceGoal: 'Biofirmas potenciales y muestreo de arcillas lacustres',
+        color: '#a855f7',
+        coords: [[18.450, 77.395], [18.468, 77.395], [18.468, 77.418], [18.450, 77.418]]
+      },
+      {
+        name: 'Formaciones de Retículas / Boxwork Cementadas (Monte Sharp)',
+        instrument: 'Curiosity Mastcam + ChemCam (Campaña 2025)',
+        scienceGoal: 'Estudio de vetas minerales de sulfatos y circulación hídrica subterránea',
+        color: '#f59e0b',
+        coords: [[-4.732, 137.850], [-4.765, 137.850], [-4.765, 137.888], [-4.732, 137.888]]
+      }
+    ];
+
+    const PERSEVERANCE_TRAVERSE_COORDS = [
+      [18.4447, 77.4508], [18.4395, 77.4480], [18.4312, 77.4415],
+      [18.4420, 77.4280], [18.4510, 77.4150], [18.4589, 77.4036],
+      [18.4665, 77.3945], [18.4735, 77.3862], [18.4790, 77.3740]
+    ];
+
+    const CURIOSITY_BOXWORK_TRAVERSE = [
+      [-4.7120, 137.8320], [-4.7250, 137.8450], [-4.7410, 137.8610], [-4.7580, 137.8780]
+    ];
+
+    const APP = {
+      section: 'explorer',
+      searchExtent: 1,
+      demoTerrain: false,
+      sectionStates: {},
+      backendUrl: null,
+      requestId: 0,
+      returnRoutes: {},
+      formFactor: 'habitat',    // 'habitat' | 'tablet' | 'hud'
+      clickMode: 'dest',        // 'dest' | 'orig'
+      selectedRoute: 'green',    // 'green' | 'blue' | 'red'
+      origLatLng: [18.4447, 77.4508],
+      destLatLng: [18.4589, 77.4036],
+      crewMode: 'pair_rover',   // 'pair_rover' | 'pair_foot' | 'solo_foot'
+      solarScenario: 'nominal', // 'nominal' | 'sep_2017' | 'flare_x18'
+      solarLs: 'ls_90',
+      ltstWindow: '1600',
+      massKg: 165,
+      isAnalogEarth: false,
+      analogWeatherOverride: null,
+
+      // Capas superpuestas activas
+      layers: {
+        mineral: false,
+        hazard: true,
+        shield: true,
+        pnr: false
+      },
+
+      tifDem: null,
+      activeDem: null,
+      routes: { green: null, blue: null, red: null },
+
+      // Simulación EVA en tiempo real
+      simInterval: null,
+      simProgress: 0,
+      walkerMarker: null,
+      profileSyncMarker: null,
+
+      // Visor Panorámico Real
+      panoOpen: false,
+      activeRoverSite: null,
+      realPhotosList: [],
+      realPhotoIdx: 0,
+      panoPanOffsetPx: 0,
+      isDraggingPhoto: false,
+      dragStartX: 0
+    };
+
+    // =========================================================================
+    // 2. GEODESIA ESFÉRICA MARCIANA (Marte esférico R=3396190 m)
+    // =========================================================================
+    function planetRadius() { return APP.isAnalogEarth ? 6371008.8 : MARS_RADIUS_M; }
+
+    function marsDistMeters(lat1, lon1, lat2, lon2) {
+      const p1 = lat1 * DEG_TO_RAD;
+      const p2 = lat2 * DEG_TO_RAD;
+      const dp = (lat2 - lat1) * DEG_TO_RAD;
+      const dl = (lon2 - lon1) * DEG_TO_RAD;
+      const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+      return 2 * planetRadius() * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+    }
+
+    function marsBearingDeg(lat1, lon1, lat2, lon2) {
+      const p1 = lat1 * DEG_TO_RAD;
+      const p2 = lat2 * DEG_TO_RAD;
+      const dl = (lon2 - lon1) * DEG_TO_RAD;
+      const y = Math.sin(dl) * Math.cos(p2);
+      const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+      return (Math.atan2(y, x) * RAD_TO_DEG + 360) % 360;
+    }
+
+    // =========================================================================
+    // 3. MAPA GLOBAL LEAFLET (EPSG:4326) + CAPAS CIENTÍFICAS HIPERLOCALIZADAS
+    // =========================================================================
+    let map = null;
+    let markerOrig = null;
+    let markerDest = null;
+    let routesLayerGroup = null;
+    let thematicLayerGroup = null;
+    let roverSitesLayerGroup = null;
+    let tifFootprintRect = null;
+
+    function initMap() {
+      map = L.map('mars-map', {
+        crs: L.CRS.EPSG4326,
+        center: [18.4518, 77.4272],
+        zoom: 11,
+        minZoom: 1,
+        maxZoom: 18,
+        worldCopyJump: false
+      });
+
+      const vikingColorLayer = L.tileLayer(
+        'https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/{z}/{y}/{x}.jpg',
+        {
+          attribution: 'NASA / JPL / USGS Mars Trek (Viking MDIM 2.1 • Marte esférico R=3396190 m)',
+          tileSize: 256,
+          zoomOffset: 0,
+          minZoom: 0,
+          maxNativeZoom: 7,
+          maxZoom: 18,
+          noWrap: true,
+          bounds: [[-90, -180], [90, 180]]
+        }
+      ).addTo(map);
+
+      const molaReliefLayer = L.tileLayer(
+        'https://trek.nasa.gov/tiles/Mars/EQ/Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw/1.0.0/default/default028mm/{z}/{y}/{x}.jpg',
+        {
+          attribution: 'NASA / MOLA + HRSC Color Shaded Relief',
+          tileSize: 256,
+          zoomOffset: 0,
+          minZoom: 0,
+          maxNativeZoom: 6,
+          maxZoom: 18,
+          noWrap: true,
+          bounds: [[-90, -180], [90, 180]]
+        }
+      );
+
+      L.control.layers(
+        {
+          'Óptica Marte Real (Viking MDIM 2.1)': vikingColorLayer,
+          'Topografía Global (MOLA + HRSC)': molaReliefLayer
+        },
+        null,
+        { position: 'topright' }
+      ).addTo(map);
+
+      thematicLayerGroup = L.layerGroup().addTo(map);
+      routesLayerGroup = L.layerGroup().addTo(map);
+      roverSitesLayerGroup = L.layerGroup().addTo(map);
+
+      // Estaciones verificadas de Perseverance y Curiosity
+      VERIFIED_ROVER_SITES.forEach((site) => {
+        L.circleMarker([site.lat, site.lon], {
+          radius: 5.5,
+          color: site.rover === 'msl' ? '#f59e0b' : '#00d2ff',
+          weight: 1.6,
+          fillColor: site.rover === 'msl' ? '#f59e0b' : '#00d2ff',
+          fillOpacity: 0.45
+        })
+          .bindTooltip(`Fotos Reales (${site.rover === 'msl' ? 'Curiosity' : 'Perseverance'}): ${site.name}`, { direction: 'top' })
+          .addTo(roverSitesLayerGroup);
+      });
+
+      const origIcon = L.divIcon({ className: 'mars-pin orig', iconSize: [16, 16], iconAnchor: [8, 8] });
+      const destIcon = L.divIcon({ className: 'mars-pin dest', iconSize: [16, 16], iconAnchor: [8, 8] });
+
+      markerOrig = L.marker(APP.origLatLng, { icon: origIcon, draggable: true })
+        .bindTooltip('Origen EVA (Base / Hábitat)', { direction: 'top' })
+        .addTo(map);
+
+      markerDest = L.marker(APP.destLatLng, { icon: destIcon, draggable: true })
+        .bindTooltip('Objetivo Científico EVA', { direction: 'top' })
+        .addTo(map);
+
+      markerOrig.on('dragend', () => {
+        const ll = markerOrig.getLatLng();
+        APP.origLatLng = [ll.lat, ll.lng];
+        stopEvaSimulation();
+        onMissionUpdated();
+      });
+
+      markerDest.on('dragend', () => {
+        const ll = markerDest.getLatLng();
+        APP.destLatLng = [ll.lat, ll.lng];
+        stopEvaSimulation();
+        onMissionUpdated();
+      });
+
+      map.on('click', (e) => {
+        const lat = Math.max(-89.5, Math.min(89.5, e.latlng.lat));
+        const lon = Math.max(-179.9, Math.min(179.9, e.latlng.lng));
+        stopEvaSimulation();
+        if (APP.clickMode === 'orig') {
+          APP.origLatLng = [lat, lon];
+          markerOrig.setLatLng(APP.origLatLng);
+        } else {
+          APP.destLatLng = [lat, lon];
+          markerDest.setLatLng(APP.destLatLng);
+        }
+        onMissionUpdated();
+      });
+
+      map.on('mousemove', (e) => {
+        const latDir = e.latlng.lat >= 0 ? 'N' : 'S';
+        const lonDir = e.latlng.lng >= 0 ? 'E' : 'O';
+        document.getElementById('cursor-readout').textContent =
+          `${Math.abs(e.latlng.lat).toFixed(4)}° ${latDir}, ${Math.abs(e.latlng.lng).toFixed(4)}° ${lonDir}`;
+      });
+
+      map.on('zoomend', () => {
+        if (APP.routes.green && APP.routes.blue && APP.routes.red) {
+          drawRoutesOnMap();
+        }
+      });
+    }
+
+    // =========================================================================
+    // 4. RENDERIZADO DE CAPAS CIENTÍFICAS HIPERLOCALIZADAS SUPERPUESTAS
+    // =========================================================================
+    function renderThematicLayers(dem) {
+      thematicLayerGroup.clearLayers();
+      if (!dem) return;
+
+      // 1. Capa Espectral / Mineralógica (Unidades CRISM, SuperCam, Curiosity Boxwork 2025)
+      if (APP.layers.mineral) {
+        MINERAL_ZONES.forEach((mz) => {
+          L.polygon(mz.coords, {
+            color: mz.color,
+            weight: 1.5,
+            fillColor: mz.color,
+            fillOpacity: 0.14,
+            dashArray: '4, 4'
+          })
+            .bindPopup(
+              `<div style="font-family:monospace; font-size:11px; color:#0f172a;">
+                <strong>${mz.name}</strong><br/>
+                <em>Contexto instrumental (polígono manual, no medición):</em> ${mz.instrument}<br/>
+                <em>Objetivo:</em> ${mz.scienceGoal}
+              </div>`
+            )
+            .addTo(thematicLayerGroup);
+        });
+
+        L.polyline(PERSEVERANCE_TRAVERSE_COORDS, { color: '#f59e0b', weight: 2, dashArray: '5,5', opacity: 0.75 })
+          .bindTooltip('Traza ilustrativa de Perseverance (puntos manuales)')
+          .addTo(thematicLayerGroup);
+
+        L.polyline(CURIOSITY_BOXWORK_TRAVERSE, { color: '#fbbf24', weight: 2.2, dashArray: '4,4', opacity: 0.85 })
+          .bindTooltip('Traza ilustrativa de Curiosity (puntos manuales)')
+          .addTo(thematicLayerGroup);
+      }
+
+      // 2. Capa de Obstáculos Topográficos (>15° pendientes / formaciones rocosas) y Apertura de cielo (Ωc)
+      const step = 4; // Muestreo limpio sobre la malla 110x110 para fluidez gráfica
+      for (let r = 0; r < GRID_N; r += step) {
+        for (let c = 0; c < GRID_N; c += step) {
+          const idx = r * GRID_N + c;
+          const slp = dem.slopeDeg[idx];
+          const omega = dem.skyView[idx];
+          const [lat, lon] = dem.cellToLatLon(r, c);
+
+          if (APP.layers.hazard && slp > 14.5) {
+            const isSevere = slp > 20.0;
+            L.circleMarker([lat, lon], {
+              radius: isSevere ? 4.5 : 3.2,
+              stroke: false,
+              fillColor: isSevere ? '#ef4444' : '#f59e0b',
+              fillOpacity: isSevere ? 0.42 : 0.28
+            })
+              .bindTooltip(`Obstáculo Topográfico: Pendiente ${slp.toFixed(1)}°`)
+              .addTo(thematicLayerGroup);
+          } else if (APP.layers.shield && omega < 0.72) {
+            L.circleMarker([lat, lon], {
+              radius: 4.2,
+              stroke: false,
+              fillColor: '#10b981',
+              fillOpacity: 0.30
+            })
+              .bindTooltip(`Apertura de cielo estimada: ${omega.toFixed(2)}. No indica protección radiológica.`)
+              .addTo(thematicLayerGroup);
+          }
+        }
+      }
+
+      // 3. Anillo Dinámico de Punto de No Retorno (PNR) según tripulación/rover y entorno
+      if (APP.layers.pnr) {
+        const crewMult = APP.crewMode === 'pair_rover' ? 1.45 : APP.crewMode === 'pair_foot' ? 1.12 : 1.0;
+        const radMult = APP.solarScenario === 'nominal' ? 1.0 : 0.68;
+        const maxSafeRadiusM = Math.round(4800 * crewMult * radMult);
+
+        // Convertir radio en metros a grados aproximados en latitud actual
+        const degRadius = maxSafeRadiusM / (DEG_TO_RAD * planetRadius());
+        L.polygon(Array.from({length: 96}, (_, i) => {
+          const bearing = i * 2 * Math.PI / 96, delta = maxSafeRadiusM / planetRadius();
+          const lat = APP.origLatLng[0] * DEG_TO_RAD, lon = APP.origLatLng[1] * DEG_TO_RAD;
+          const p = Math.asin(Math.sin(lat)*Math.cos(delta)+Math.cos(lat)*Math.sin(delta)*Math.cos(bearing));
+          const q = lon + Math.atan2(Math.sin(bearing)*Math.sin(delta)*Math.cos(lat), Math.cos(delta)-Math.sin(lat)*Math.sin(p));
+          return [p * RAD_TO_DEG, q * RAD_TO_DEG];
+        }), {
+          color: '#00d2ff',
+          weight: 1.5,
+          dashArray: '6, 6',
+          fillColor: '#00d2ff',
+          fillOpacity: 0.03
+        })
+          .bindTooltip(`Radio ilustrativo, sin cálculo de autonomía: ${(maxSafeRadiusM / 1000).toFixed(2)} km`)
+          .addTo(thematicLayerGroup);
+
+        const directM = marsDistMeters(APP.origLatLng[0], APP.origLatLng[1], APP.destLatLng[0], APP.destLatLng[1]);
+        const pnrState = directM <= maxSafeRadiusM ? 'DENTRO DEL RADIO ILUSTRATIVO' : 'FUERA DEL RADIO ILUSTRATIVO';
+        document.getElementById('hud-top-center').textContent =
+          `AZ: ${Math.round(marsBearingDeg(APP.origLatLng[0], APP.origLatLng[1], APP.destLatLng[0], APP.destLatLng[1]))}° • ${pnrState}`;
+      }
+    }
+
+    // =========================================================================
+    // =========================================================================
+    // 5. CARGA DEL .TIF REAL Y GENERADOR TOPOGRÁFICO DETERMINISTA UNIFORME
+    // =========================================================================
+    function fetchWithTimeout(url, timeoutMs = 15000, options = {}) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+    }
+
+    function applyLoadedTifDataset(data, sourceLabel, update = true) {
+      if (!Number.isInteger(data.width) || !Number.isInteger(data.height) || data.width < 2 || data.height < 2 || data.width > 2048 || data.height > 2048 ||
+          !Array.isArray(data.elevations) || data.elevations.length !== data.width * data.height ||
+          !Array.isArray(data.bbox) || data.bbox.length !== 4 || !data.bbox.every(Number.isFinite) ||
+          data.bbox[0] >= data.bbox[2] || data.bbox[1] >= data.bbox[3] || data.bbox[1] < -90 || data.bbox[3] > 90) {
+        throw new Error('Dimensiones, elevaciones o cobertura DEM inválidas.');
+      }
+      const full = data.full_bbox || data.bbox;
+      if (!Array.isArray(full) || full.length !== 4 || !full.every(Number.isFinite) ||
+          full[0] > data.bbox[0] || full[1] > data.bbox[1] || full[2] < data.bbox[2] || full[3] < data.bbox[3]) {
+        throw new Error('La cobertura completa no contiene el recorte.');
+      }
+      const w = Number(data.width);
+      const h = Number(data.height);
+      const elevArr = new Float32Array(w * h);
+
+      // Los valores NoData se conservan como NaN (NO se rellenan con la media: eso fabricaría
+      // mesetas planas). buildDynamicDem los trata como celdas infranqueables.
+      let validCount = 0;
+      for (let i = 0; i < w * h; i++) {
+        const v = data.elevations[i];
+        if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 1e6) {
+          elevArr[i] = Number(v);
+          validCount++;
+        } else {
+          elevArr[i] = NaN;
+        }
+      }
+      if (validCount === 0) {
+        document.getElementById('tif-status-detail').textContent =
+          `Rechazado: "${sourceLabel}" no contiene ninguna elevación válida.`;
+        throw new Error('El DEM no contiene datos válidos.');
+      }
+      const validFraction = validCount / (w * h);
+
+      APP.tifDem = {
+        sourceName: sourceLabel,
+        width: w,
+        height: h,
+        bbox: data.bbox,
+        fullBbox: data.full_bbox || data.bbox,
+        elevations: elevArr,
+        validFraction,
+        cellSizeM: Number(data.cell_size_m) || 25,
+        sourceResolutionM: data.source_resolution_m_approx || null,
+        downsampling: Number(data.downsampling_factor_approx) || null
+      };
+
+      if (tifFootprintRect) map.removeLayer(tifFootprintRect);
+      const [minLon, minLat, maxLon, maxLat] = data.bbox;
+      tifFootprintRect = L.rectangle([[minLat, minLon], [maxLat, maxLon]], {
+        color: '#00d2ff',
+        weight: 1.5,
+        dashArray: '6, 4',
+        fillOpacity: 0.04
+      })
+        .bindTooltip(`Huella GeoTIFF Real: ${sourceLabel}`, { direction: 'top' })
+        .addTo(map);
+
+      document.getElementById('tif-status-detail').textContent =
+        `Activo: ${sourceLabel} (${w}×${h} celdas • ${(validFraction * 100).toFixed(1)}% con dato • huella [${minLat.toFixed(2)}°..${maxLat.toFixed(2)}° N, ${minLon.toFixed(2)}°..${maxLon.toFixed(2)}° E])`;
+
+      if (update) onMissionUpdated();
+    }
+
+    async function tryConnectBackendOrPrecomputed(silent = false) {
+      const detailEl = document.getElementById('tif-status-detail');
+      if (!silent) detailEl.textContent = 'Conectando con backend Python (.tif) o JSON preprocesado...';
+
+      const endpoints = [
+        { url: './api/dem/jezero', label: 'Backend Python (USGS .TIF)' },
+        { url: 'http://127.0.0.1:8000/api/dem/jezero', label: 'Backend Python 127.0.0.1:8000 (.TIF)' },
+        { url: 'http://localhost:8000/api/dem/jezero', label: 'Backend Python localhost:8000 (.TIF)' },
+        { url: './jezero_dem_precomputed.json', label: 'jezero_dem_precomputed.json (USGS .TIF)' }
+      ];
+
+      for (const ep of endpoints) {
+        try {
+          const res = await fetchWithTimeout(ep.url, 15000);
+          if (!res.ok) continue;
+          const json = await res.json();
+          if (json && Array.isArray(json.elevations) && json.elevations.length > 0 && Array.isArray(json.bbox)) {
+            const name = json.source_file ? `${json.source_file} (${ep.label})` : ep.label;
+            APP.backendUrl = ep.url.includes("/api/dem/") ? ep.url : null;
+            applyLoadedTifDataset(json, name);
+            return true;
+          }
+        } catch (_) {}
+      }
+
+      if (!silent) {
+        detailEl.textContent = 'No se detectó servidor en puerto 8000. Inicia mars_dem_server.py o abre tu .tif local.';
+      }
+      return false;
+    }
+
+    async function handleLocalGeoTiffUpload(file) {
+      const detailEl = document.getElementById('tif-status-detail');
+      if (!file) return;
+      detailEl.textContent = `Leyendo GeoTIFF "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`;
+
+      try {
+        if (typeof GeoTIFF === 'undefined') throw new Error('GeoTIFF.js no disponible.');
+        const tiff = await GeoTIFF.fromBlob(file);
+        const image = await tiff.getImage();
+        const origW = image.getWidth();
+        const origH = image.getHeight();
+        const targetSize = 140;
+
+        // (1) Debe ser un DEM de una sola banda: nunca interpretar canales de color como elevación.
+        const spp = image.getSamplesPerPixel();
+        const bits = image.getBitsPerSample ? image.getBitsPerSample(0) : 32;
+        const fmt = image.getSampleFormat ? image.getSampleFormat(0) : 3;
+        if (spp !== 1) {
+          throw new Error(`el archivo tiene ${spp} bandas; se requiere un DEM de 1 banda (¿es una imagen RGB?).`);
+        }
+        if (fmt === 1 && bits <= 8) {
+          throw new Error('el archivo es de 8 bits sin signo (imagen), no un DEM de elevación.');
+        }
+
+        // (2) El CRS debe ser geográfico. El navegador no reproyecta; un GeoTIFF proyectado
+        //     (metros) se rechaza en vez de asignarlo a coordenadas inventadas.
+        const bboxRaw = image.getBoundingBox();
+        let geoKeys = {};
+        try { geoKeys = image.getGeoKeys() || {}; } catch (_) {}
+        const isProjected = Boolean(geoKeys.ProjectedCSTypeGeoKey || geoKeys.ProjectionGeoKey) &&
+          geoKeys.GTModelTypeGeoKey === 1;
+        const looksGeographic = bboxRaw &&
+          Math.abs(bboxRaw[1]) <= 90 && Math.abs(bboxRaw[3]) <= 90 &&
+          Math.abs(bboxRaw[0]) <= 360 && Math.abs(bboxRaw[2]) <= 360;
+        if (isProjected || !looksGeographic) {
+          throw new Error('el GeoTIFF está en un CRS proyectado o sin georreferencia geográfica; reproyéctalo con mars_dem_server.py.');
+        }
+        const geoLabel = [geoKeys.GeogCitationGeoKey, geoKeys.GTCitationGeoKey].join(' ').toLowerCase();
+        const radius = Number(geoKeys.GeogSemiMajorAxisGeoKey);
+        if (geoKeys.GTModelTypeGeoKey !== 2 ||
+            !(geoLabel.includes('mars') || (radius > 3300000 && radius < 3500000))) {
+          throw new Error('No se pudo verificar un CRS geográfico marciano. Usa el servidor Python para validar y reproyectar el archivo.');
+        }
+        let bbox = [...bboxRaw];
+        if (bbox[0] >= 180) { bbox[0] -= 360; bbox[2] -= 360; }
+
+        const rasters = await image.readRasters({
+          width: targetSize,
+          height: targetSize,
+          resampleMethod: 'nearest',  // 'bilinear' mezclaría NoData con elevaciones válidas
+          interleave: true
+        });
+
+        // (3) NoData explícito del archivo + valores centinela habituales
+        const noData = image.getGDALNoData ? image.getGDALNoData() : null;
+        const elevations = new Array(rasters.length);
+        for (let i = 0; i < rasters.length; i++) {
+          const v = rasters[i];
+          const isNoData = !Number.isFinite(v) ||
+            (noData !== null && noData !== undefined && !Number.isNaN(noData) && v === noData) ||
+            v < -1e6 || v > 1e6;
+          elevations[i] = isNoData ? null : v;
+        }
+
+        const midLatRad = ((bbox[1] + bbox[3]) / 2) * DEG_TO_RAD;
+        const cellSizeM = ((bbox[2] - bbox[0]) / targetSize) * (DEG_TO_RAD * planetRadius()) * Math.cos(midLatRad);
+
+        APP.backendUrl = null;
+        applyLoadedTifDataset(
+          { width: targetSize, height: targetSize, bbox, cell_size_m: cellSizeM, elevations },
+          `${file.name} (${origW}×${origH} px → ${targetSize}×${targetSize})`
+        );
+      } catch (err) {
+        detailEl.textContent = `GeoTIFF rechazado (${(file.size / (1024 * 1024)).toFixed(0)} MB): ${err.message}`;
+      }
+    }
+
+    function isPointInsideTif(lat, lon) {
+      if (!APP.tifDem) return false;
+      const [minLon, minLat, maxLon, maxLat] = APP.tifDem.bbox;
+      return lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat;
+    }
+
+    // La ventana COMPLETA del DEM debe caer dentro de la huella del .tif: no solo los dos pines.
+    function isWindowInsideTif(minLat, maxLat, minLon, maxLon) {
+      if (!APP.tifDem) return false;
+      const [bMinLon, bMinLat, bMaxLon, bMaxLat] = APP.tifDem.bbox;
+      return minLon >= bMinLon && maxLon <= bMaxLon && minLat >= bMinLat && maxLat <= bMaxLat;
+    }
+
+    function sampleTifElevationBilinear(lat, lon) {
+      const tif = APP.tifDem;
+      const [minLon, minLat, maxLon, maxLat] = tif.bbox;
+      const u = Math.max(0, Math.min(tif.width - 1, ((lon - minLon) / (maxLon - minLon)) * tif.width - 0.5));
+      const v = Math.max(0, Math.min(tif.height - 1, ((maxLat - lat) / (maxLat - minLat)) * tif.height - 0.5));
+
+      const x0 = Math.max(0, Math.min(tif.width - 2, Math.floor(u)));
+      const y0 = Math.max(0, Math.min(tif.height - 2, Math.floor(v)));
+      const fx = Math.max(0, Math.min(1, u - x0));
+      const fy = Math.max(0, Math.min(1, v - y0));
+
+      const z00 = tif.elevations[y0 * tif.width + x0];
+      const z10 = tif.elevations[y0 * tif.width + (x0 + 1)];
+      const z01 = tif.elevations[(y0 + 1) * tif.width + x0];
+      const z11 = tif.elevations[(y0 + 1) * tif.width + (x0 + 1)];
+
+      const terms=[[z00,(1-fx)*(1-fy)],[z10,fx*(1-fy)],[z01,(1-fx)*fy],[z11,fx*fy]];
+      let z=0; for(const [value,weight] of terms){if(weight<=1e-12)continue;if(!Number.isFinite(value))return NaN;z+=value*weight;}return z;
+    }
+
+    // Hash espacial determinista 2D (sin estado, 100% reproducible por celda planetaria)
+    function deterministicCellHash(ix, iy, seed) {
+      let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041);
+      h = (h ^ (h >>> 13)) >>> 0;
+      h = Math.imul(h, 1274126177) >>> 0;
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967295.0;
+    }
+
+    // Campo topográfico determinista y estacionario en coordenadas geodésicas (lat, lon):
+    // Produce distribución uniforme y repetible de cráteres de impacto (cuenco + borde elevado),
+    // macizos montañosos (picos cónicos suavizados) y crestas estructurales (ridged multifractal).
+    function sampleGlobalMolaElevation(lat, lon) {
+      if (APP.isAnalogEarth) {
+        const baseEarth = lat < 0 ? 2420 : 3395;
+        const ridgeE = (1.0 - Math.abs(Math.sin(lat * 310 + Math.cos(lon * 290)))) * 95;
+        return baseEarth + Math.sin(lat * 420) * 65 + Math.cos(lon * 420) * 55 + ridgeE;
+      }
+
+      // 1. Macro-relieve planetario estacionario (dicotomía marciana + grandes provincias)
+      const dichotomy = -1100 - 2600 * Math.tanh((lat - 5.0) / 18.0);
+      const dOlympus = Math.hypot((lat - 18.65) * 1.1, (lon + 133.8) * 1.0);
+      const olympusBoost = dOlympus < 6.0 ? (6.0 - dOlympus) * 3600 : 0;
+      const dValles = Math.hypot((lat + 13.9) * 2.2, (lon + 59.2) * 0.45);
+      const vallesDrop = dValles < 3.2 ? -(3.2 - dValles) * 1950 : 0;
+
+      // 2. Retículas Boxwork estacionarias en Monte Sharp (Gale)
+      const dGale = Math.hypot(lat + 4.74, lon - 137.86);
+      let galeRelief = 0;
+      if (dGale < 0.25) {
+        const boxworkRidge = Math.abs(Math.sin(lat * 2600) * Math.cos(lon * 2600)) * 28;
+        const mountSlope = (-4.72 - lat) * 2800;
+        galeRelief = mountSlope + boxworkRidge;
+      }
+
+      // 3. Crestas estructurales deterministas (Ridged Noise estacionario a escala local y regional)
+      // Paso fijo en grados (~118 m por radian en ecuador marciano) -> invariante al zoom o distancia
+      const k1 = 1450.0;
+      const k2 = 3100.0;
+      const r1 = 1.0 - Math.abs(Math.sin(lat * k1 + 0.65 * Math.cos(lon * k1 * 0.92)));
+      const r2 = 1.0 - Math.abs(Math.cos(lon * k2 - 0.55 * Math.sin(lat * k2 * 1.08)));
+      const ridgesM = Math.pow(r1, 2.4) * 54.0 + Math.pow(r2, 2.8) * 22.0;
+
+      // 4. Distribución uniforme en rejilla geodésica jittered de Cráteres y Montañas deterministas
+      // Cada celda de 0.016° (~950 m en Marte) contiene exactamente 1 rasgo topográfico determinista
+      // desplazado uniformemente dentro de su celda para evitar alineaciones artificiales.
+      const cellDeg = 0.016;
+      const gx = Math.floor(lon / cellDeg);
+      const gy = Math.floor(lat / cellDeg);
+      let featuresM = 0;
+
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const cx = gx + ox;
+          const cy = gy + oy;
+
+          const jx = deterministicCellHash(cx, cy, 101);
+          const jy = deterministicCellHash(cx, cy, 202);
+          const typeRoll = deterministicCellHash(cx, cy, 303);
+          const sizeRoll = deterministicCellHash(cx, cy, 404);
+
+          const featLon = (cx + 0.18 + 0.64 * jx) * cellDeg;
+          const featLat = (cy + 0.18 + 0.64 * jy) * cellDeg;
+
+          // Distancia métrica local en superficie marciana
+          const cosL = Math.cos(lat * DEG_TO_RAD);
+          const dx = (lon - featLon) * DEG_TO_RAD * planetRadius() * cosL;
+          const dy = (lat - featLat) * DEG_TO_RAD * planetRadius();
+          const distM = Math.hypot(dx, dy);
+
+          if (typeRoll < 0.56) {
+            // CRÁTER DE IMPACTO: cuenco parabólico + anillo de eyecta elevado + talud exterior
+            const radiusM = 135.0 + sizeRoll * 225.0; // Radio entre 135 m y 360 m
+            if (distM < radiusM * 1.65) {
+              const rn = distM / radiusM;
+              const depthM = radiusM * 0.24; // Relación profundidad/diámetro marciana realista (~0.12)
+              const rimHeightM = depthM * 0.34;
+              if (rn <= 1.0) {
+                // Interior del cráter + subida hacia el borde
+                const bowl = -depthM * (1.0 - rn * rn);
+                const innerRim = rimHeightM * Math.exp(-Math.pow((rn - 1.0) / 0.18, 2));
+                featuresM += bowl + innerRim;
+              } else {
+                // Falda exterior del anillo del cráter
+                const outerRim = rimHeightM * Math.exp(-Math.pow((rn - 1.0) / 0.26, 2));
+                featuresM += outerRim;
+              }
+            }
+          } else {
+            // MONTAÑA / DOMO VOLCÁNICO O MONTE AISLADO (Butte/Mesa)
+            const radiusM = 160.0 + sizeRoll * 260.0; // Radio basal entre 160 m y 420 m
+            if (distM < radiusM * 1.4) {
+              const rn = distM / radiusM;
+              const peakM = 75.0 + sizeRoll * 135.0; // Altura entre 75 m y 210 m
+              const profile = Math.exp(-2.6 * rn * rn) * (1.0 + 0.18 * Math.cos(rn * Math.PI * 2.0));
+              featuresM += peakM * profile;
+            }
+          }
+        }
+      }
+
+      return dichotomy + olympusBoost + vallesDrop + galeRelief + ridgesM + featuresM;
+    }
+
+    // =========================================================================
+    // 6. MALLA DEM DINÁMICA 110x110 + ANÁLISIS GEOMÉTRICO + MOTOR DE RUTAS 3D
+    // =========================================================================
+    function planningWindow() {
+      const [oLat, oLon] = APP.origLatLng;
+      const [dLat, dLon] = APP.destLatLng;
+
+      if(APP.searchExtent==='full' && APP.tifDem){
+        const [minLon,minLat,maxLon,maxLat]=APP.tifDem.fullBbox;
+        const cosMid=Math.max(.15,Math.cos((minLat+maxLat)/2*DEG_TO_RAD));
+        return {minLat,maxLat,minLon,maxLon,cosMid,oLat,oLon,dLat,dLon};
+      }
+      const directDistM = Math.max(120, marsDistMeters(oLat, oLon, dLat, dLon));
+      const spanLat = APP.searchExtent * Math.max(Math.abs(dLat - oLat) * 1.65, (directDistM * 0.65) / (DEG_TO_RAD * planetRadius()));
+      const cosMid = Math.max(0.15, Math.cos(((oLat + dLat) / 2) * DEG_TO_RAD));
+      const spanLon = APP.searchExtent * Math.max(Math.abs(dLon - oLon) * 1.65, (directDistM * 0.65) / (DEG_TO_RAD * planetRadius() * cosMid));
+
+      const midLat = (oLat + dLat) / 2;
+      const midLon = (oLon + dLon) / 2;
+
+      let minLat = Math.max(-89.5, midLat - spanLat / 2);
+      let maxLat = Math.min(89.5, midLat + spanLat / 2);
+      let minLon = Math.max(-179.9, midLon - spanLon / 2);
+      let maxLon = Math.min(179.9, midLon + spanLon / 2);
+
+      if (APP.tifDem && !APP.demoTerrain) {
+        const b = APP.tifDem.fullBbox;
+        minLon = Math.max(minLon, b[0]); minLat = Math.max(minLat, b[1]);
+        maxLon = Math.min(maxLon, b[2]); maxLat = Math.min(maxLat, b[3]);
+      }
+      return {minLat, maxLat, minLon, maxLon, cosMid, oLat, oLon, dLat, dLon};
+    }
+
+    function buildDynamicDem() {
+      const {minLat, maxLat, minLon, maxLon, cosMid, oLat, oLon, dLat, dLon} = planningWindow();
+      const dxM = ((maxLon - minLon) / GRID_N) * (DEG_TO_RAD * planetRadius()) * cosMid;
+      const dyM = ((maxLat - minLat) / GRID_N) * (DEG_TO_RAD * planetRadius());
+      const cellSizeM = Math.max(1, (dxM + dyM) / 2);
+
+      // El .tif solo se usa si cubre la ventana COMPLETA del DEM (no solo los pines): fuera de su huella
+      // las elevaciones del borde se repetirían y crearían una meseta artificial.
+      const bothInsideTif = !APP.isAnalogEarth && isWindowInsideTif(minLat, maxLat, minLon, maxLon);
+      if (!APP.demoTerrain && !bothInsideTif) throw new Error('El recorte no cubre toda la misión; no se permite terreno sintético.');
+      const tifPartial = Boolean(APP.tifDem) && !bothInsideTif &&
+        (isPointInsideTif(oLat, oLon) || isPointInsideTif(dLat, dLon));
+      const bannerEl = document.getElementById('dem-source-banner');
+      const hdrDot = document.getElementById('hdr-dem-dot');
+      const hdrLbl = document.getElementById('hdr-dem-label');
+
+      if (bothInsideTif) {
+        bannerEl.className = 'dem-source-tag tif-active';
+        bannerEl.textContent = `FUENTE DEM: Archivo .TIF Real (${APP.tifDem.sourceName})`;
+        hdrDot.className = 'dot';
+        hdrLbl.textContent = `DEM real · malla ${cellSizeM.toFixed(1)} m · entrada ${APP.tifDem.cellSizeM.toFixed(1)} m`;
+      } else if (APP.isAnalogEarth) {
+        bannerEl.className = 'dem-source-tag';
+        bannerEl.textContent = 'FUENTE DEM: Terreno terrestre SINTÉTICO (no descargado)';
+        hdrDot.className = 'dot amber';
+        hdrLbl.textContent = `Análogo Tierra (${cellSizeM.toFixed(1)} m/celda)`;
+      } else {
+        bannerEl.className = 'dem-source-tag';
+        bannerEl.textContent = tifPartial
+          ? 'FUENTE DEM: SINTÉTICO — el .TIF no cubre toda la ventana de la misión; no se usa. NO es altimetría real.'
+          : 'FUENTE DEM: Relieve procedural SINTÉTICO (no es altimetría MOLA real). Conecta un .TIF para datos reales.';
+        hdrDot.className = 'dot amber';
+        hdrLbl.textContent = `DEM sintético (${cellSizeM.toFixed(1)} m/celda)`;
+      }
+
+      document.getElementById('grid-res-badge').textContent = `${GRID_N}×${GRID_N} (${cellSizeM.toFixed(1)} m)`;
+
+      const total = GRID_N * GRID_N;
+      const elev = new Float32Array(total);
+      const slopeDeg = new Float32Array(total);
+      const roughM = new Float32Array(total);
+      const curvatureM = new Float32Array(total); // Positivo = cresta/borde cráter; Negativo = fondo de cuenca
+      const hazardScore = new Float32Array(total); // Índice compuesto de riesgo [0..1+]
+      const skyView = new Float32Array(total).fill(1.0);
+      const sciBonus = new Float32Array(total);
+      const gradE = new Float32Array(total); // Gradiente Horn dz/dEste (m/m)
+      const gradN = new Float32Array(total); // Gradiente Horn dz/dNorte (m/m)
+      const clearanceM = new Float32Array(total); // Distancia métrica Chamfer al obstáculo más cercano
+
+      for (let r = 0; r < GRID_N; r++) {
+        const lat = maxLat - ((r + 0.5) / GRID_N) * (maxLat - minLat);
+        for (let c = 0; c < GRID_N; c++) {
+          const lon = minLon + ((c + 0.5) / GRID_N) * (maxLon - minLon);
+          const idx = r * GRID_N + c;
+          elev[idx] = bothInsideTif
+            ? sampleTifElevationBilinear(lat, lon)
+            : sampleGlobalMolaElevation(lat, lon);
+
+          let maxSci = 0;
+          for (let s = 0; s < VERIFIED_ROVER_SITES.length; s++) {
+            const dSite = marsDistMeters(lat, lon, VERIFIED_ROVER_SITES[s].lat, VERIFIED_ROVER_SITES[s].lon);
+            if (dSite < 1200) maxSci = Math.max(maxSci, (1200 - dSite) / 1200);
+          }
+          sciBonus[idx] = maxSci;
+        }
+      }
+
+      const rawNoData=new Uint8Array(total);
+      for(let i=0;i<total;i++) if(!Number.isFinite(elev[i]))rawNoData[i]=1;
+      const noDataMask=new Uint8Array(total);
+      let nodataCount=0;
+      for(let r=0;r<GRID_N;r++)for(let c=0;c<GRID_N;c++){
+        const i=r*GRID_N+c;
+        for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+          const rr=r+dr,cc=c+dc;
+          if(rr>=0&&cc>=0&&rr<GRID_N&&cc<GRID_N&&rawNoData[rr*GRID_N+cc])noDataMask[i]=1;
+        }
+        if(noDataMask[i])nodataCount++;
+      }
+
+      // Análisis geomorfológico granular:
+      // 1) Gradiente Horn 3x3 + pendiente direccional máxima de 8 vecinos (detecta paredes de cráteres y escarpes estrechos)
+      // 2) Curvatura Laplaciana (detecta bordes afilados de cráteres y crestas)
+      // 3) Rugosidad TRI (Terrain Ruggedness Index) + oclusión hemisférica Ωc
+      const horizonOffsets = [[-4, 0], [4, 0], [0, -4], [0, 4], [-3, -3], [-3, 3], [3, -3], [3, 3]];
+      const diagDistM = Math.hypot(dxM, dyM);
+
+      for (let r = 0; r < GRID_N; r++) {
+        const rU = Math.max(0, r - 1);
+        const rD = Math.min(GRID_N - 1, r + 1);
+        for (let c = 0; c < GRID_N; c++) {
+          const cL = Math.max(0, c - 1);
+          const cR = Math.min(GRID_N - 1, c + 1);
+          const idx = r * GRID_N + c;
+          const z = elev[idx];
+          if(noDataMask[idx]){slopeDeg[idx]=90;hazardScore[idx]=Infinity;continue;}
+
+          const zNW = elev[rU * GRID_N + cL];
+          const zN  = elev[rU * GRID_N + c];
+          const zNE = elev[rU * GRID_N + cR];
+          const zW  = elev[r * GRID_N + cL];
+          const zE  = elev[r * GRID_N + cR];
+          const zSW = elev[rD * GRID_N + cL];
+          const zS  = elev[rD * GRID_N + c];
+          const zSE = elev[rD * GRID_N + cR];
+
+          // Gradiente Horn 3x3 (componentes Este/Norte, reutilizadas por la descomposición pitch/roll)
+          const dzdx = ((zNE + 2 * zE + zSE) - (zNW + 2 * zW + zSW)) / (8 * dxM);
+          const dzdy = ((zNW + 2 * zN + zNE) - (zSW + 2 * zS + zSE)) / (8 * dyM);
+          gradE[idx] = dzdx;
+          gradN[idx] = dzdy;
+          const hornSlope = Math.atan(Math.hypot(dzdx, dzdy)) * RAD_TO_DEG;
+
+          // Pendiente direccional máxima hacia cualquiera de los 8 vecinos inmediatos
+          // Evita que bordes estrechos de cráteres o crestas se promedien a cero
+          const maxCardDz = Math.max(Math.abs(z - zN), Math.abs(z - zS)) / dyM;
+          const maxLonDz  = Math.max(Math.abs(z - zW), Math.abs(z - zE)) / dxM;
+          const maxDiagDz = Math.max(
+            Math.abs(z - zNW), Math.abs(z - zNE),
+            Math.abs(z - zSW), Math.abs(z - zSE)
+          ) / diagDistM;
+          const edgeSlope = Math.atan(Math.max(maxCardDz, maxLonDz, maxDiagDz)) * RAD_TO_DEG;
+
+          // Combinación conservadora: captura tanto taludes extensos como paredes de cráter
+          slopeDeg[idx] = Math.max(hornSlope, edgeSlope);
+
+          // Índice de Rugosidad del Terreno (TRI - Riley et al.)
+          const sqDiffSum =
+            (zNW - z) ** 2 + (zN - z) ** 2 + (zNE - z) ** 2 +
+            (zW - z) ** 2 + (zE - z) ** 2 +
+            (zSW - z) ** 2 + (zS - z) ** 2 + (zSE - z) ** 2;
+          roughM[idx] = Math.sqrt(sqDiffSum / 8.0);
+
+          // Curvatura Laplaciana (diferencia respecto al anillo medio de vecinos)
+          const meanRing = 0.25 * (zN + zS + zW + zE);
+          curvatureM[idx] = z - meanRing;
+
+          // Puntuación unificada de riesgo geomorfológico
+          const normSlope = slopeDeg[idx] / 15.0;
+          const normRough = roughM[idx] / Math.max(1.5, cellSizeM * 0.14);
+          const normRim   = Math.max(0, curvatureM[idx]) / Math.max(2.0, cellSizeM * 0.18);
+          hazardScore[idx] = 0.55 * normSlope + 0.25 * normRough + 0.20 * normRim;
+
+          // Oclusión de cielo (Sky View Factor Ωc)
+          let occlusionSum = 0;
+          for (let h = 0; h < 8; h++) {
+            const hr = Math.min(GRID_N - 1, Math.max(0, r + horizonOffsets[h][0]));
+            const hc = Math.min(GRID_N - 1, Math.max(0, c + horizonOffsets[h][1]));
+            const distH = Math.hypot(horizonOffsets[h][0] * dyM, horizonOffsets[h][1] * dxM);
+            const relElev = elev[hr * GRID_N + hc] - z;
+            if (Number.isFinite(relElev) && relElev > 0 && distH > 0) {
+              occlusionSum += Math.min(0.65, Math.atan2(relElev, distH) * 1.15);
+            }
+          }
+          skyView[idx] = Math.max(0.40, Math.min(1.00, 1.0 - (occlusionSum / 8.0)));
+        }
+      }
+
+      for (let i = 0; i < total; i++) {
+        if (noDataMask[i]) { slopeDeg[i] = 90; hazardScore[i] = 2.0; }
+      }
+
+      // Campo de despeje lateral (clearanceM): Transformada de Distancia Chamfer de 2 pasadas O(N^2).
+      // Semillas comunes: NoData o pendiente >35°. Cada perfil impone además su propio límite.
+      const ORTHO_STEP_M = cellSizeM;
+      const DIAG_STEP_M = Math.hypot(dxM,dyM);
+      for (let i = 0; i < total; i++) {
+        clearanceM[i] = (noDataMask[i] || slopeDeg[i] > 35) ? 0 : Infinity;
+      }
+      // Pasada 1: barrido hacia adelante (arriba-izquierda -> abajo-derecha)
+      for (let r = 0; r < GRID_N; r++) {
+        for (let c = 0; c < GRID_N; c++) {
+          const idx = r * GRID_N + c;
+          let best = clearanceM[idx];
+          if (r > 0) best = Math.min(best, clearanceM[(r - 1) * GRID_N + c] + dyM);
+          if (c > 0) best = Math.min(best, clearanceM[r * GRID_N + (c - 1)] + dxM);
+          if (r > 0 && c > 0) best = Math.min(best, clearanceM[(r - 1) * GRID_N + (c - 1)] + DIAG_STEP_M);
+          if (r > 0 && c < GRID_N - 1) best = Math.min(best, clearanceM[(r - 1) * GRID_N + (c + 1)] + DIAG_STEP_M);
+          clearanceM[idx] = best;
+        }
+      }
+      // Pasada 2: barrido hacia atrás (abajo-derecha -> arriba-izquierda)
+      for (let r = GRID_N - 1; r >= 0; r--) {
+        for (let c = GRID_N - 1; c >= 0; c--) {
+          const idx = r * GRID_N + c;
+          let best = clearanceM[idx];
+          if (r < GRID_N - 1) best = Math.min(best, clearanceM[(r + 1) * GRID_N + c] + dyM);
+          if (c < GRID_N - 1) best = Math.min(best, clearanceM[r * GRID_N + (c + 1)] + dxM);
+          if (r < GRID_N - 1 && c < GRID_N - 1) best = Math.min(best, clearanceM[(r + 1) * GRID_N + (c + 1)] + DIAG_STEP_M);
+          if (r < GRID_N - 1 && c > 0) best = Math.min(best, clearanceM[(r + 1) * GRID_N + (c - 1)] + DIAG_STEP_M);
+          clearanceM[idx] = best;
+        }
+      }
+
+      const latLonToCell = (lat, lon) => {
+        const c = Math.max(0, Math.min(GRID_N - 1, Math.floor(((lon - minLon) / (maxLon - minLon)) * GRID_N)));
+        const r = Math.max(0, Math.min(GRID_N - 1, Math.floor(((maxLat - lat) / (maxLat - minLat)) * GRID_N)));
+        return { r, c, idx: r * GRID_N + c };
+      };
+
+      const cellToLatLon = (r, c) => {
+        const lat = maxLat - ((r + 0.5) / GRID_N) * (maxLat - minLat);
+        const lon = minLon + ((c + 0.5) / GRID_N) * (maxLon - minLon);
+        return [lat, lon];
+      };
+
+      return {
+        minLat, maxLat, minLon, maxLon,
+        dxM, dyM, cellSizeM,
+        elev, slopeDeg, roughM, curvatureM, hazardScore, skyView, sciBonus,
+        gradE, gradN, clearanceM,
+        latLonToCell, cellToLatLon, bothInsideTif, noDataMask, nodataCount
+      };
+    }
+
+    function getEnvParams() {
+      const radMap = { nominal: 0.64, sep_2017: 1.28, flare_x18: 1.65 };
+      const tauMap = { '1600': 0.35, '0700': 0.85, dust_storm: 1.85 };
+      const velMap = { '1600': 1.00, '0700': 0.91, dust_storm: 0.74 };
+      const lsMap = {
+        ls_90:  { tempC: -58, mbar: 6.4, tauMult: 1.05, label: 'Ls 90° Afelio' },
+        ls_210: { tempC: -34, mbar: 7.6, tauMult: 1.35, label: 'Ls 210° Polvo' },
+        ls_330: { tempC: -22, mbar: 7.2, tauMult: 0.92, label: 'Ls 330° Perihelio' }
+      };
+      const lsInfo = lsMap[APP.solarLs] || lsMap.ls_90;
+      const baseTau = (tauMap[APP.ltstWindow] || 0.35) * lsInfo.tauMult;
+
+      // Factor de tripulación y rover de apoyo robótico
+      const crewFactor = APP.crewMode === 'pair_rover'
+        ? { speedMult: 1.16, metMult: 0.82, sciYield: 'Pareja + Rover (supuesto)' }
+        : APP.crewMode === 'pair_foot'
+          ? { speedMult: 1.02, metMult: 0.92, sciYield: 'Pareja a pie (supuesto)' }
+          : { speedMult: 0.94, metMult: 1.08, sciYield: 'Nominal (Individual)' };
+
+      if (APP.isAnalogEarth && APP.analogWeatherOverride) {
+        return {
+          dailyMsv: 0.008,
+          tau: 0.15,
+          velFactor: APP.analogWeatherOverride.velFactor * crewFactor.speedMult,
+          metFactor: crewFactor.metMult,
+          sciYield: crewFactor.sciYield,
+          massKg: APP.massKg,
+          tempC: APP.analogWeatherOverride.tempC,
+          mbar: APP.analogWeatherOverride.mbar,
+          lsLabel: 'Análogo Terrestre'
+        };
+      }
+
+      return {
+        dailyMsv: radMap[APP.solarScenario] || 0.64,
+        tau: Math.min(3.2, baseTau),
+        velFactor: (velMap[APP.ltstWindow] || 1.00) * (APP.solarLs === 'ls_210' ? 0.93 : 1.0) * crewFactor.speedMult,
+        metFactor: crewFactor.metMult,
+        sciYield: crewFactor.sciYield,
+        massKg: APP.massKg,
+        tempC: lsInfo.tempC,
+        mbar: lsInfo.mbar,
+        lsLabel: lsInfo.label
+      };
+    }
+
+    class MinHeap {
+      constructor() { this.data = []; }
+      push(node) {
+        this.data.push(node);
+        let i = this.data.length - 1;
+        while (i > 0) {
+          const p = (i - 1) >> 1;
+          if (this.data[p].f <= this.data[i].f) break;
+          [this.data[p], this.data[i]] = [this.data[i], this.data[p]];
+          i = p;
+        }
+      }
+      pop() {
+        const top = this.data[0];
+        const end = this.data.pop();
+        if (this.data.length > 0) {
+          this.data[0] = end;
+          let i = 0;
+          while (true) {
+            let smallest = i;
+            const l = (i << 1) + 1;
+            const r = l + 1;
+            if (l < this.data.length && this.data[l].f < this.data[smallest].f) smallest = l;
+            if (r < this.data.length && this.data[r].f < this.data[smallest].f) smallest = r;
+            if (smallest === i) break;
+            [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
+            i = smallest;
+          }
+        }
+        return top;
+      }
+      get size() { return this.data.length; }
+    }
+
+    function validateGridPath(dem, ids, size, slopeLimit) {
+      const permitted = index => index >= 0 && index < size * size &&
+        !dem.noDataMask[index] && Number.isFinite(dem.elev[index]) &&
+        Number.isFinite(dem.slopeDeg[index]) && dem.slopeDeg[index] <= slopeLimit &&
+        dem.clearanceM[index] > 0;
+      if (!ids.length || !ids.every(permitted)) return false;
+      for (let step = 1; step < ids.length; step++) {
+        const previous = ids[step - 1], current = ids[step];
+        const row = Math.floor(previous / size), col = previous % size;
+        const nextRow = Math.floor(current / size), nextCol = current % size;
+        const dr = nextRow - row, dc = nextCol - col;
+        if (Math.abs(dr) > 1 || Math.abs(dc) > 1 || (!dr && !dc)) return false;
+        if (dr && dc && (!permitted(row * size + nextCol) || !permitted(nextRow * size + col))) return false;
+        const distance = Math.hypot(dr * dem.dyM, dc * dem.dxM);
+        if (Math.atan2(Math.abs(dem.elev[current] - dem.elev[previous]), distance) * RAD_TO_DEG > slopeLimit) return false;
+      }
+      return true;
+    }
+
+    function routeFailure(profileKey, reason, slopeLimit) {
+      return {profileKey, reason, reachedGoal:false, geometryValid:false, executable:false,
+        coords:[], elevations:[], cells:[], distKm:0,timeMin:0,maxSlope:0,avgSlope:0,avgSkyView:1,
+        elevGainM:0,steepSegments:0,steepDistM:0,totalKcal:0,uncKcal:0,o2Kg:0,h2oL:0,doseMsv:0,
+        slopeLimitUsed:slopeLimit,smoothing:'none',controlVertices:0};
+    }
+
+    // Finite 8-connected graph. No corner cutting, shortcuts, or relaxed endpoint limits.
+    // Green: phase 1 finds the minimum possible peak terrain-risk; phase 2 minimizes
+    // cumulative cost restricted to that peak. Two phases avoid incorrect lexicographic labels.
+    function computeSingle3DRoute(dem, startCell, goalCell, profileKey, env, maxSlopeDeg, routeStart = APP.origLatLng, routeEnd = APP.destLatLng) {
+      const n = GRID_N, total = n*n;
+      const limit = maxSlopeDeg;
+      const safe = idx => idx >= 0 && idx < total && !dem.noDataMask[idx] &&
+        Number.isFinite(dem.elev[idx]) && Number.isFinite(dem.slopeDeg[idx]) &&
+        dem.slopeDeg[idx] <= limit && dem.clearanceM[idx] > 0;
+      if (!safe(startCell.idx)) return routeFailure(profileKey,'Origen sobre pendiente prohibida o sin datos. Mueve el origen a terreno permitido.',limit);
+      if (!safe(goalCell.idx)) return routeFailure(profileKey,'Destino sobre pendiente prohibida o sin datos. Elige un punto de observación accesible cercano.',limit);
+      const riskValues = new Float64Array(total);
+      for (let idx = 0; idx < total; idx++) riskValues[idx] = Math.max(dem.slopeDeg[idx]/limit,
+        dem.roughM[idx]/Math.max(1,dem.cellSizeM*0.25),
+        Math.abs(dem.curvatureM[idx])/Math.max(1,dem.cellSizeM*0.25));
+      const risk = idx => riskValues[idx];
+      const directions = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+      const neighbours = (idx, visit) => {
+        const r = Math.floor(idx/n), c=idx%n;
+        for (const [dr,dc] of directions) {
+          const nr=r+dr,nc=c+dc;
+          if(nr<0||nc<0||nr>=n||nc>=n) continue;
+          const j=nr*n+nc;
+          if(!safe(j)) continue;
+          if(dr&&dc&&(!safe(r*n+nc)||!safe(nr*n+c))) continue;
+          const distance=Math.hypot(dc*dem.dxM,dr*dem.dyM);
+          const dz=dem.elev[j]-dem.elev[idx];
+          const edgeSlope=Math.atan2(Math.abs(dz),distance)*RAD_TO_DEG;
+          if(edgeSlope>limit) continue;
+          // Diagonal footprint includes both side cells, including their risk.
+          let peak=Math.max(risk(idx),risk(j),edgeSlope/limit);
+          if(dr&&dc) peak=Math.max(peak,risk(r*n+nc),risk(nr*n+c));
+          visit(j,distance,dz,peak);
+        }
+      };
+      let peakBound=Infinity;
+      if(profileKey==='green') {
+        const peaks=new Float64Array(total).fill(Infinity), heap=new MinHeap();
+        peaks[startCell.idx]=risk(startCell.idx);heap.push({idx:startCell.idx,f:peaks[startCell.idx]});
+        while(heap.size) {
+          const cur=heap.pop();if(cur.f!==peaks[cur.idx])continue;
+          if(cur.idx===goalCell.idx){peakBound=cur.f;break;}
+          neighbours(cur.idx,(j,d,dz,peak)=>{
+            const next=Math.max(cur.f,peak);
+            if(next<peaks[j]){peaks[j]=next;heap.push({idx:j,f:next});}
+          });
+        }
+        if(!Number.isFinite(peakBound)) return routeFailure(profileKey,'No hay conexión con estos límites dentro de la cobertura examinada. No se inventa una ruta.',limit);
+      }
+      const cost=new Float64Array(total).fill(Infinity), parent=new Int32Array(total).fill(-1), heap=new MinHeap();
+      cost[startCell.idx]=0;heap.push({idx:startCell.idx,f:0});
+      while(heap.size) {
+        const cur=heap.pop();if(cur.f!==cost[cur.idx])continue;
+        if(cur.idx===goalCell.idx)break;
+        neighbours(cur.idx,(j,d,dz,peak)=>{
+          if(peak>peakBound+1e-10)return;
+          const slope=Math.max(dem.slopeDeg[cur.idx],dem.slopeDeg[j]);
+          const clearance=Math.min(dem.clearanceM[cur.idx],dem.clearanceM[j]);
+          const proximity=Number.isFinite(clearance)?Math.max(0,1-clearance/(2*dem.cellSizeM)):0;
+          const dist3D=Math.hypot(d,dz);
+          let edge;
+          if(profileKey==='green') edge=dist3D*(1+12*peak*peak+8*proximity*proximity)+Math.max(0,dz)*8;
+          else if(profileKey==='blue') edge=dist3D*(1+5*peak*peak+3*proximity*proximity)+Math.max(0,dz)*4;
+          else edge=dist3D/Math.max(.2,.9*Math.exp(-.052*slope)*env.velFactor);
+          const next=cur.f+edge;
+          if(next<cost[j]){cost[j]=next;parent[j]=cur.idx;heap.push({idx:j,f:next});}
+        });
+      }
+      if(!Number.isFinite(cost[goalCell.idx]))return routeFailure(profileKey,'No hay un paso permitido entre los puntos en la zona examinada.',limit);
+      const ids=[];
+      for(let i=goalCell.idx;i!==-1;i=parent[i]) ids.push(i);
+      ids.reverse();
+      if (!validateGridPath(dem, ids, n, limit)) {
+        return routeFailure(profileKey, 'La validación independiente rechazó la geometría.', limit);
+      }
+      // Preserve the graph geometry exactly. Include endpoint-to-center connectors inside
+      // their validated cells, rather than moving the first/last grid vertices afterwards.
+      const coords=[routeStart.slice(),...ids.map(i=>dem.cellToLatLon(Math.floor(i/n),i%n)),routeEnd.slice()];
+      const cells=[startCell,...ids.map(i=>({r:Math.floor(i/n),c:i%n,idx:i})),goalCell];
+      const elevations=cells.map(c=>dem.elev[c.idx]);
+      const result=evaluateRouteAffections(coords,elevations,cells,dem,env,profileKey,true);
+      Object.assign(result,{geometryValid:true,executable:true,slopeLimitUsed:limit,smoothing:'none',controlVertices:coords.length,
+        peakRisk:profileKey==='green'?peakBound:ids.reduce((peak,i)=>Math.max(peak,risk(i)),0),graphCost:cost[goalCell.idx],
+        reason:profileKey==='green'?'Menor riesgo máximo en esta malla; después, menor coste acumulado.':'Camino de coste mínimo del perfil en esta malla.'});
+      return result;
+    }
+
+    function evaluateRouteAffections(coords, elevations, cells, dem, env, profileKey, reachedGoal) {
+      let dist3DM = 0;
+      let totalSec = 0;
+      let totalKcal = 0;
+      let elevGainM = 0;
+      let maxSlope = 0;
+      let sumSlope = 0;
+      let sumSkyView = 0;
+      let sumRough = 0;
+      let steepSegments = 0;
+      let steepDistM = 0;
+
+      for (let i = 0; i < cells.length; i++) {
+        const cellSlope = dem.slopeDeg[cells[i].idx];
+        sumSkyView += dem.skyView[cells[i].idx];
+        sumRough += dem.roughM[cells[i].idx];
+
+        if (i > 0) {
+          // Cada tramo ya es una muestra densa del DEM (<= 0.5 celdas): dz es el desnivel real
+          // de ese tramo, por lo que subir y bajar una colina SÍ suma ascenso y distancia 3D.
+          const horizM = marsDistMeters(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]);
+          const dz = elevations[i] - elevations[i - 1];
+          const seg3D = Math.hypot(horizM, dz);
+          dist3DM += seg3D;
+          if (dz > 0) elevGainM += dz;
+
+          const segSlope = Math.min(45, Math.atan2(Math.abs(dz), Math.max(0.5, horizM)) * RAD_TO_DEG);
+          const effSegSlope = Math.max(cellSlope, segSlope);
+          sumSlope += effSegSlope;
+          if (effSegSlope > maxSlope) maxSlope = effSegSlope;
+          if (effSegSlope > 12.0) { steepSegments++; steepDistM += seg3D; }
+
+          const speedMps = Math.max(0.20, 0.90 * Math.exp(-0.052 * effSegSlope) * env.velFactor);
+          const segSec = seg3D / speedMps;
+          totalSec += segSec;
+
+          const grade = dz / Math.max(0.5, horizM);
+          const kcalPerHour = (1.42 * env.massKg * env.metFactor) * (1.0 + Math.max(-0.2, grade * 5.2) + 0.045 * effSegSlope);
+          totalKcal += kcalPerHour * (segSec / 3600);
+        } else {
+          sumSlope += cellSlope;
+          if (cellSlope > maxSlope) maxSlope = cellSlope;
+        }
+      }
+
+      const hours = totalSec / 3600;
+      const avgSlope = sumSlope / Math.max(1, cells.length);
+      const avgSkyView = sumSkyView / Math.max(1, cells.length);
+      const avgRoughM = sumRough / Math.max(1, cells.length);
+      const sextantUncMin = Math.max(1, Math.round((totalSec / 60) * (0.065 + Math.min(0.08, avgRoughM / 40))));
+      const uncKcal = 48.2 * hours;
+      const o2Kg = (totalKcal / 3000) * 0.84;
+      const h2oL = (totalKcal / 1000) * 1.15;
+      const doseMsv = (env.dailyMsv / 24.0) * hours; // Scenario only; no shielding credit.
+
+      return {
+        profileKey,
+        coords,
+        elevations,
+        cells,
+        distKm: dist3DM / 1000,
+        timeMin: totalSec / 60,
+        sextantUncMin,
+        maxSlope,
+        avgSlope,
+        avgSkyView,
+        elevGainM,
+        steepSegments,
+        steepDistM,
+        totalKcal,
+        uncKcal,
+        o2Kg,
+        h2oL,
+        doseMsv,
+        reachedGoal
+      };
+    }
+
+    // =========================================================================
+    // 7. DIBUJO DE RUTAS Y SIMULACIÓN DE EJECUCIÓN EVA EN TIEMPO REAL
+    // =========================================================================
+    function offsetLatLngPolyline(coords, pxOffset) {
+      if (!map || Math.abs(pxOffset) < 0.1 || coords.length < 2) return coords;
+      const pts = coords.map((ll) => map.latLngToLayerPoint(ll));
+      const shifted = pts.map((pt, i) => {
+        const prev = pts[Math.max(0, i - 1)];
+        const next = pts[Math.min(pts.length - 1, i + 1)];
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const ll = map.layerPointToLatLng(L.point(pt.x + nx * pxOffset, pt.y + ny * pxOffset));
+        return [ll.lat, ll.lng];
+      });
+      shifted[0] = coords[0];
+      shifted[shifted.length - 1] = coords[coords.length - 1];
+      return shifted;
+    }
+
+    function drawRoutesOnMap() {
+      routesLayerGroup.clearLayers();
+
+      const specs = [
+        { key: 'green', color: '#10b981', pxOffset: -5.0 },
+        { key: 'blue',  color: '#3b82f6', pxOffset:  0.0 },
+        { key: 'red',   color: '#ef4444', pxOffset:  5.0 }
+      ];
+
+      specs.sort((a,b)=>(a.key===APP.selectedRoute?1:0)-(b.key===APP.selectedRoute?1:0));
+      specs.forEach((sp) => {
+        const r = APP.routes[sp.key];
+        if (!r?.executable || r.coords.length < 2) return;
+
+        const isSel = APP.selectedRoute === sp.key;
+        const visualCoords = r.coords; // Never shift a route away from its evaluated terrain.
+
+        const notExec = !r.executable;
+        const poly = L.polyline(visualCoords, {
+          color: sp.color,
+          weight: notExec ? 2.2 : (isSel ? 5 : 3.2),
+          opacity: notExec ? 0.65 : (isSel ? 1.0 : 0.85),
+          dashArray: notExec ? '2, 8' : null,
+          lineCap: 'round',
+          lineJoin: 'round'
+        });
+        if (notExec) {
+          poly.bindTooltip(r.reachedGoal
+            ? 'Ruta NO validada: la geometría suavizada no superó la verificación del DEM'
+            : 'SIN RUTA: la búsqueda no alcanzó el destino (línea recta indicativa, NO transitable)');
+        }
+
+        poly.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          stopEvaSimulation();
+          APP.selectedRoute = sp.key;
+          renderRouteCards();
+          renderValidationPanel();
+          renderElevationSvg();
+          drawRoutesOnMap();
+        });
+
+        L.polyline(visualCoords,{color:'#07101e',weight:isSel?8:5,opacity:.9,interactive:false}).addTo(routesLayerGroup);
+        poly.addTo(routesLayerGroup);
+      });
+      const back = APP.returnRoutes[APP.selectedRoute];
+      if (APP.section === 'jezero' && back?.executable) {
+        L.polyline(back.coords,{color:'#fbbf24',weight:2.5,dashArray:'7,6'})
+          .bindTooltip('Regreso calculado a la base · estimación del prototipo').addTo(routesLayerGroup);
+      }
+    }
+
+    function startEvaSimulation() {
+      stopEvaSimulation();
+      const route = APP.routes[APP.selectedRoute];
+      if (!route || route.coords.length < 2) return;
+
+      const simPanel = document.getElementById('eva-sim-telemetry');
+      simPanel.style.display = 'flex';
+      if (!route.executable) {
+        document.getElementById('sim-progress-txt').innerHTML =
+          `<strong style="color:#ef4444;">SIMULACIÓN BLOQUEADA (${APP.selectedRoute.toUpperCase()}):</strong> ` +
+          (route.reachedGoal
+            ? 'la geometría de la ruta no superó la validación contra el DEM.'
+            : 'no se encontró una ruta que alcance el destino. Mueve el origen/destino o elige otra ruta.');
+        return;
+      }
+      if (APP.section === 'jezero') {
+        const back = APP.returnRoutes[APP.selectedRoute];
+        const budget = Number(document.getElementById('mission-budget').value);
+        const science = Number(document.getElementById('mission-science').value);
+        if (!back?.executable || !Number.isFinite(budget) || budget < 30 || budget > 1440 || !Number.isFinite(science) || science < 0 || science > 600 || route.timeMin + back.timeMin + science > budget * 0.8) {
+          document.getElementById('sim-progress-txt').textContent = 'Simulación bloqueada: revisa el regreso y el presupuesto de tiempo con reserva.';
+          return;
+        }
+      }
+      APP.simProgress = 0;
+
+      const walkerIcon = L.divIcon({ className: 'mars-pin walker', iconSize: [16, 16], iconAnchor: [8, 8] });
+      APP.walkerMarker = L.marker(route.coords[0], { icon: walkerIcon }).addTo(map);
+
+      APP.simInterval = setInterval(() => {
+        const activeR = APP.routes[APP.selectedRoute];
+        if (!activeR) return;
+        APP.simProgress = Math.min(1, APP.simProgress + 0.015);
+        const idx = Math.min(activeR.coords.length - 1, Math.floor(APP.simProgress * (activeR.coords.length - 1)));
+        const pos = activeR.coords[idx];
+        APP.walkerMarker.setLatLng(pos);
+
+        const pct = Math.round(APP.simProgress * 100);
+        const distDone = (activeR.distKm * APP.simProgress).toFixed(2);
+        const o2Rem = Math.max(12, Math.round(100 - (activeR.o2Kg * 28 * APP.simProgress)));
+        const doseAcc = (activeR.doseMsv * APP.simProgress).toFixed(3);
+
+        document.getElementById('sim-progress-txt').innerHTML =
+          `<strong>EVA (${APP.selectedRoute.toUpperCase()}):</strong> ${pct}% • Dist: ${distDone}/${activeR.distKm.toFixed(2)} km • O₂ estimado consumido: ${(activeR.o2Kg * APP.simProgress).toFixed(2)} kg • Dosis: ${doseAcc} mSv`;
+        document.getElementById('hud-top-right').textContent =
+          `PLSS O₂ estimado consumido: ${(activeR.o2Kg * APP.simProgress).toFixed(2)} kg • DOSIS: ${doseAcc} mSv • RAD: ${getEnvParams().dailyMsv.toFixed(2)} mSv/d`;
+
+        if (APP.simProgress >= 1) {
+          clearInterval(APP.simInterval);
+          APP.simInterval = null;
+          document.getElementById('sim-progress-txt').innerHTML =
+            `<strong style="color:#10b981;">FIN DE ANIMACIÓN DE IDA (100%, no acredita ciencia realizada):</strong> ${activeR.distKm.toFixed(2)} km • Dosis total: ${activeR.doseMsv.toFixed(3)} mSv.`;
+        }
+      }, 140);
+    }
+
+    function stopEvaSimulation() {
+      if (APP.simInterval) {
+        clearInterval(APP.simInterval);
+        APP.simInterval = null;
+      }
+      if (APP.walkerMarker && map) {
+        map.removeLayer(APP.walkerMarker);
+        APP.walkerMarker = null;
+      }
+      const simPanel = document.getElementById('eva-sim-telemetry');
+      if (simPanel) simPanel.style.display = 'none';
+    }
+
+    // =========================================================================
+    // 8. TARJETAS COMPARATIVAS, VALIDACIÓN Y PERFIL ALTIMÉTRICO SINCRONIZADO
+    // =========================================================================
+    function formatDuration(min) {
+      const rounded=Math.max(0,Math.round(min));
+      if (rounded < 60) return `${rounded} min`;
+      const h = Math.floor(rounded / 60);
+      const m = rounded % 60;
+      return `${h}h ${m.toString().padStart(2, '0')}m`;
+    }
+
+    function renderRouteCards() {
+      document.getElementById('btn-sim-eva').disabled=!APP.routes[APP.selectedRoute]?.executable;
+      const container = document.getElementById('routes-container');
+      const items = [
+        { key: 'green', name: 'Ruta Verde — Menor riesgo', tag: 'θ ≤ 12,5°' },
+        { key: 'blue',  name: 'Ruta Azul — Equilibrada', tag: 'COSTE MULTICRITERIO' },
+        { key: 'red',   name: 'Ruta Roja — Prioridad tiempo', tag: 'TIEMPO' }
+      ];
+
+      container.innerHTML = items.map((it) => {
+        const r = APP.routes[it.key];
+        const sel = APP.selectedRoute === it.key ? 'selected' : '';
+        if (!r?.executable) return `<div class="route-card ${it.key} ${sel}" data-rkey="${it.key}"><strong>${it.name}</strong><p style="font-size:12px;line-height:1.5;margin-top:8px">${r?.reason || 'Sin cálculo disponible.'}</p><small>No se dibuja ni exporta una trayectoria inexistente.</small></div>`;
+        const tag = it.key === 'green' ? `θ ≤ ${r.slopeLimitUsed}°` : it.tag;
+        const statusHtml = r.executable
+          ? `<div style="font-family:var(--font-mono); font-size:0.6rem; color:#6ee7b7; margin-bottom:0.28rem;">✔ Ruta comprobada en la malla; no certifica seguridad</div>`
+          : r.reachedGoal
+            ? `<div style="font-family:var(--font-mono); font-size:0.6rem; color:#fcd34d; margin-bottom:0.28rem;">⚠ NO VALIDADA: la geometría no superó la verificación del DEM</div>`
+            : `<div style="font-family:var(--font-mono); font-size:0.6rem; color:#fca5a5; margin-bottom:0.28rem;">✖ SIN RUTA: no alcanza el destino. Métricas = línea recta indicativa NO transitable</div>`;
+        return `
+          <div class="route-card ${it.key} ${sel}" data-rkey="${it.key}">
+            <div class="route-top">
+              <span class="route-title">${it.name}</span>
+              <span class="route-tag">${tag}</span>
+            </div>
+            ${statusHtml}
+            <div class="metrics-6">
+              <div class="m-cell"><span>Dist. 3D</span><strong>${r.distKm.toFixed(2)} km</strong></div>
+              <div class="m-cell"><span>Tiempo</span><strong>${formatDuration(r.timeMin)}</strong></div>
+              <div class="m-cell"><span>Pend. Máx</span><strong>${r.maxSlope.toFixed(1)}°</strong></div>
+              <div class="m-cell"><span>Energía</span><strong>${Math.round(r.totalKcal)} kcal</strong></div>
+              <div class="m-cell"><span>O₂ / H₂O</span><strong>${r.o2Kg.toFixed(2)}kg / ${r.h2oL.toFixed(1)}L</strong></div>
+              <div class="m-cell"><span>Dosis RAD</span><strong>${r.doseMsv.toFixed(3)} mSv</strong></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.route-card').forEach((el) => {
+        el.addEventListener('click', () => {
+          stopEvaSimulation();
+          APP.selectedRoute = el.dataset.rkey;
+          renderRouteCards();
+          renderValidationPanel();
+          renderElevationSvg();
+          drawRoutesOnMap();
+        });
+      });
+    }
+
+    function renderValidationPanel() {
+      const k = APP.selectedRoute;
+      const r = APP.routes[k];
+      if (!r?.executable) {
+        ['val-topo','val-bio','val-rad','val-atmo'].forEach(id=>document.getElementById(id).querySelector('p').textContent=r?.reason || 'Sin ruta válida.');
+        renderMissionSummary();return;
+      }
+
+      const names = { green: 'Ruta Verde (Conservadora)', blue: 'Ruta Azul (Equilibrada)', red: 'Ruta Roja (Prioridad tiempo)' };
+      document.getElementById('val-panel-title').textContent = `5. Evaluación del prototipo — ${names[k]}`;
+
+      const env = getEnvParams();
+      const directKm = marsDistMeters(APP.origLatLng[0], APP.origLatLng[1], APP.destLatLng[0], APP.destLatLng[1]) / 1000;
+      const detourPct = Math.max(0, ((r.distKm - directKm) / Math.max(0.01, directKm)) * 100);
+
+      const topoBox = document.getElementById('val-topo');
+      topoBox.className = `val-item ${!r.executable ? 'crit' : r.maxSlope > 20 ? 'crit' : r.maxSlope > 14 ? 'warn' : 'ok'}`;
+      const execWarn = !r.reachedGoal
+        ? '<strong style="color:#fca5a5;">[SIN RUTA: el destino no es alcanzable con estas restricciones; las cifras son de una línea recta NO transitable]</strong> '
+        : !r.geometryValid
+          ? '<strong style="color:#fcd34d;">[RUTA NO VALIDADA contra el DEM]</strong> '
+          : '';
+      topoBox.querySelector('p').innerHTML =
+        `${execWarn}Pend. máx: <strong>${r.maxSlope.toFixed(1)}°</strong> (media ${r.avgSlope.toFixed(1)}°) • Desnivel: <strong>+${Math.round(r.elevGainM)} m</strong> (+${detourPct.toFixed(0)}% rodeo) • Escenario de equipo: <strong>${env.sciYield}</strong>.`;
+
+      const bioBox = document.getElementById('val-bio');
+      bioBox.className = `val-item ${r.totalKcal > 1400 ? 'warn' : 'ok'}`;
+      bioBox.querySelector('p').innerHTML =
+        `Estimación exploratoria: <strong>${Math.round(r.totalKcal)} kcal</strong> • O₂ ${r.o2Kg.toFixed(2)} kg • H₂O ${r.h2oL.toFixed(2)} L. Coeficientes sin calibración para EVA humana en Marte; sin intervalo de confianza validado.`;
+      const radBox = document.getElementById('val-rad');
+      radBox.className = 'val-item warn';
+      radBox.querySelector('p').textContent =
+        `Dosis de escenario: ${r.doseMsv.toFixed(3)} mSv = tasa asumida × tiempo. No incorpora blindaje del terreno ni demuestra cumplimiento de límites NASA. Condiciones ambientales: supuestos de simulación.`;
+      renderMissionSummary();
+
+      const atmoBox = document.getElementById('val-atmo');
+      const isDust = APP.ltstWindow === 'dust_storm' || APP.solarLs === 'ls_210';
+      atmoBox.className = `val-item ${isDust ? 'crit' : 'ok'}`;
+      atmoBox.querySelector('p').innerHTML =
+        `<strong>${env.lsLabel}</strong> • T ≈ <strong>${env.tempC} °C</strong>, P ≈ <strong>${env.mbar} mbar</strong>, Opacidad <strong>τ = ${env.tau.toFixed(2)}</strong> • Reducción marcha: <strong>-${Math.round((1 - env.velFactor) * 100)}%</strong>.`;
+    }
+
+    function renderElevationSvg() {
+      renderEvidence();
+      const svg = document.getElementById('elev-profile-svg');
+      const boundsLbl = document.getElementById('elev-bounds-lbl');
+      if (!svg || !APP.routes.green || !APP.routes.blue || !APP.routes.red) return;
+
+      const allElevs = [
+        ...APP.routes.green.elevations,
+        ...APP.routes.blue.elevations,
+        ...APP.routes.red.elevations
+      ];
+      if(!allElevs.length){svg.innerHTML='';boundsLbl.textContent='Sin perfil: no hay rutas válidas';return;}
+      let minZ = allElevs.reduce((a,b)=>Math.min(a,b),Infinity);
+      let maxZ = allElevs.reduce((a,b)=>Math.max(a,b),-Infinity);
+      if (Math.abs(maxZ - minZ) < 1) { minZ -= 1; maxZ += 1; }
+      if (boundsLbl) boundsLbl.textContent = `${Math.round(minZ)} m .. ${Math.round(maxZ)} m`;
+
+      const w = 360;
+      const h = 112;
+      const padX = 8;
+      const padY = 10;
+
+      const buildPoints = (elevArr) => {
+        const n = Math.max(2, elevArr.length);
+        return elevArr
+          .map((z, i) => {
+            const x = padX + (i / (n - 1)) * (w - padX * 2);
+            const norm = (z - minZ) / (maxZ - minZ);
+            const y = h - padY - norm * (h - padY * 2);
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(' ');
+      };
+
+      const lines = [
+        { key: 'green', color: '#10b981' },
+        { key: 'blue',  color: '#3b82f6' },
+        { key: 'red',   color: '#ef4444' }
+      ];
+
+      const gridLines = [0.25, 0.5, 0.75]
+        .map((f) => `<line x1="${padX}" y1="${(padY + f * (h - padY * 2)).toFixed(1)}" x2="${w - padX}" y2="${(padY + f * (h - padY * 2)).toFixed(1)}" stroke="#1e2e4a" stroke-dasharray="3,3" stroke-width="1" />`)
+        .join('');
+
+      const polylines = lines
+        .filter(ln=>APP.routes[ln.key]?.executable)
+        .map((ln) => {
+          const isSel = APP.selectedRoute === ln.key;
+          return `<polyline fill="none" stroke="${ln.color}" stroke-width="${isSel ? 2.6 : 1.5}" stroke-opacity="${isSel ? 1 : 0.7}" stroke-linecap="round" stroke-linejoin="round" points="${buildPoints(APP.routes[ln.key].elevations)}" />`;
+        })
+        .join('');
+
+      svg.innerHTML = `${gridLines}${polylines}<line id="svg-cursor-line" x1="-10" y1="0" x2="-10" y2="${h}" stroke="#00d2ff" stroke-width="1.2" stroke-dasharray="2,2" />`;
+    }
+
+    function solveAndRenderDem(dem) {
+      APP.activeDem = dem;
+      renderThematicLayers(dem);
+
+      const startCell = dem.latLonToCell(APP.origLatLng[0], APP.origLatLng[1]);
+      const goalCell = dem.latLonToCell(APP.destLatLng[0], APP.destLatLng[1]);
+      const env = getEnvParams();
+
+      // Cada perfil conserva un único límite de pendiente; nunca se relaja para forzar una ruta.
+      const solve = (profile, limits) => {
+        let res = null;
+        for (const lim of limits) {
+          res = computeSingle3DRoute(dem, startCell, goalCell, profile, env, lim);
+          res.slopeLimitUsed = lim;
+          if (res.reachedGoal) break;
+        }
+        return res;
+      };
+      APP.routes.green = solve('green', [12.5]);
+      APP.routes.blue = solve('blue', [18.5]);
+      APP.routes.red = solve('red', [24.0]);
+      APP.returnRoutes = {};
+      if (APP.section === 'jezero') {
+        for (const [key, limit] of [['green',12.5],['blue',18.5],['red',24]]) {
+          APP.returnRoutes[key] = computeSingle3DRoute(dem, goalCell, startCell, key, env, limit, APP.destLatLng, APP.origLatLng);
+        }
+      }
+
+      drawRoutesOnMap();
+      renderRouteCards();
+      renderValidationPanel();
+      renderElevationSvg();
+    }
+
+    function clearPlanning(message) {
+      clearAdvancedPlans();
+      APP.activeDem = null;
+      document.getElementById("route-search-status").textContent=message;
+      APP.routes = {green:null, blue:null, red:null};
+      APP.returnRoutes = {};
+      routesLayerGroup.clearLayers(); thematicLayerGroup.clearLayers();
+      document.getElementById('routes-container').textContent = message;
+      document.getElementById('mission-status').textContent = message;
+      document.getElementById('mission-summary').textContent = '';
+      document.getElementById('dem-source-banner').textContent = message;
+      document.getElementById('hdr-dem-label').textContent = 'DEM: planificación pendiente';
+      document.getElementById('hdr-dem-dot').className = 'dot amber';
+      document.getElementById('elev-profile-svg').innerHTML = '';
+      ['val-topo','val-bio','val-rad','val-atmo'].forEach(id => document.getElementById(id).querySelector('p').textContent = 'Sin ruta calculada.');
+      document.getElementById('btn-sim-eva').disabled = true;
+      document.getElementById('btn-export-geojson').disabled = true;
+    }
+
+    async function computeAllRoutes() {
+      const request=++APP.requestId;
+      const jezero=APP.section==='jezero';
+      stopEvaSimulation();
+      if(jezero)APP.demoTerrain=false;
+      if(!APP.demoTerrain){
+        if(!APP.tifDem){clearPlanning('Mapa disponible, rutas pendientes: carga el DEM real de esta zona. La imagen satelital no contiene alturas.');return;}
+        const b=APP.tifDem.fullBbox;
+        const inside=p=>p.every(Number.isFinite)&&p[1]>=b[0]&&p[1]<=b[2]&&p[0]>=b[1]&&p[0]<=b[3];
+        if(![APP.origLatLng,APP.destLatLng].every(inside)){
+          clearPlanning('Los puntos están fuera de la cobertura del DEM. No se calculan rutas reales sobre terreno inventado. Mueve los puntos dentro del rectángulo del DEM.');return;
+        }
+        if(jezero&&![APP.origLatLng,APP.destLatLng].every(p=>p[0]>=18&&p[0]<=19&&p[1]>=76.5&&p[1]<=78)){
+          clearPlanning('La misión Jezero debe estar dentro de Jezero. Usa el Explorador para otra región.');return;
+        }
+      }
+      if(marsDistMeters(...APP.origLatLng,...APP.destLatLng)<10){clearPlanning('Separa origen y destino al menos 10 metros.');return;}
+      const stages=APP.demoTerrain?[{extent:1,n:160},{extent:3,n:320}]:[{extent:1,n:160},{extent:3,n:320},{extent:'full',n:440}];
+      let previousWindow='';
+      for(let attempt=0;attempt<stages.length;attempt++){
+        if(request!==APP.requestId)return;
+        APP.searchExtent=stages[attempt].extent;GRID_N=stages[attempt].n;
+        const w=planningWindow();
+        const windowKey=[w.minLon,w.minLat,w.maxLon,w.maxLat,GRID_N].join(',');
+        if(windowKey===previousWindow)continue;previousWindow=windowKey;
+        clearPlanning(`Búsqueda ${attempt+1}/${stages.length}: ${attempt?'ampliando la zona para encontrar desvíos':'evaluando terreno'}…`);
+        // Allow status to paint and newer requests to cancel this generation.
+        await new Promise(resolve=>setTimeout(resolve,15));
+        if(request!==APP.requestId)return;
+        if(APP.backendUrl&&!APP.demoTerrain){
+          const query=new URLSearchParams({min_lon:w.minLon,min_lat:w.minLat,max_lon:w.maxLon,max_lat:w.maxLat,size:GRID_N});
+          try{
+            const response=await fetchWithTimeout(APP.backendUrl+'?'+query,20000);
+            if(!response.ok){let detail='';try{detail=(await response.json()).detail||'';}catch(_){}throw new Error(detail||`HTTP ${response.status}`);}
+            const data=await response.json();
+            if(request!==APP.requestId)return;
+            applyLoadedTifDataset(data,data.source_file||'DEM recortado',false);
+          }catch(err){if(request===APP.requestId)clearPlanning('No se pudo obtener el terreno: '+err.message);return;}
+        }
+        if(request!==APP.requestId)return;
+        try{solveAndRenderDem(buildDynamicDem());}
+        catch(err){clearPlanning('No se pudo planificar: '+err.message);return;}
+        const green=APP.routes.green;
+        // Larger windows may reveal a bypass, never relax the slope restriction.
+        // Do not retry endpoints that themselves are blocked in this grid.
+        if(green.executable||/^(Origen|Destino)/.test(green.reason))break;
+      }
+      if(request!==APP.requestId)return;
+      const valid=Object.values(APP.routes).filter(r=>r?.executable).length;
+      const real=APP.activeDem?.bothInsideTif;
+      const source=real?'DEM real':'DEM SINTÉTICO: las rutas NO corresponden a los cráteres de la imagen';
+      const message=`${valid}/3 perfiles con camino. ${source}. Malla ${GRID_N}×${GRID_N}, ${APP.activeDem?.cellSizeM.toFixed(1)} m/celda. ${APP.routes.green?.reason||''} Obstáculos menores que una celda pueden no detectarse.`;
+      document.getElementById('route-search-status').textContent=message;
+      document.getElementById('mission-status').textContent=message;
+      document.getElementById('btn-sim-eva').disabled=!APP.routes[APP.selectedRoute]?.executable;
+      document.getElementById('btn-export-geojson').disabled=valid===0;
+    }
+
+    function proposeNearbySafePoints(){
+      const dem=APP.activeDem;
+      if(!dem){document.getElementById('route-search-status').textContent='Primero carga el DEM y calcula la zona.';return;}
+      const nearest=point=>{
+        let best=null,dist=500;
+        for(let i=0;i<GRID_N*GRID_N;i++){
+          if(dem.noDataMask[i]||dem.slopeDeg[i]>12.5||dem.clearanceM[i]<=0)continue;
+          const ll=dem.cellToLatLon(Math.floor(i/GRID_N),i%GRID_N);
+          const d=marsDistMeters(...point,...ll);
+          if(d<dist){best=ll;dist=d;}
+        }
+        return best;
+      };
+      const a=nearest(APP.origLatLng),b=nearest(APP.destLatLng);
+      if(!a||!b){document.getElementById('route-search-status').textContent='No hay puntos permitidos a menos de 500 m de ambos extremos. Elige otra ubicación manualmente.';return;}
+      APP.origLatLng=a;APP.destLatLng=b;
+      markerOrig.setLatLng(a);markerDest.setLatLng(b);onMissionUpdated();
+    }
+
+    function renderMissionSummary() {
+      if (APP.section !== 'jezero') return;
+      const out = APP.routes[APP.selectedRoute], back = APP.returnRoutes[APP.selectedRoute];
+      const el = document.getElementById('mission-summary');
+      if (!out?.executable || !back?.executable) {
+        el.textContent = 'Misión incompleta: no hay ida y regreso comprobados en la malla para este perfil.'; return;
+      }
+      const budget = Number(document.getElementById('mission-budget').value);
+      const science = Number(document.getElementById('mission-science').value);
+      if (!Number.isFinite(budget) || budget<30 || budget>1440 || !Number.isFinite(science) || science<0 || science>600) {
+        el.textContent = 'Revisa el presupuesto (30–1440 min) y el trabajo científico (0–600 min).'; return;
+      }
+      const reserve = budget*0.2;
+      const total = out.timeMin+back.timeMin+science;
+      el.textContent = `Ida: ${formatDuration(out.timeMin)} · Regreso calculado: ${formatDuration(back.timeMin)} · Ciencia: ${science} min · Reserva: ${Math.round(reserve)} min. Total de marcha y ciencia: ${formatDuration(total)}. ${total+reserve<=budget ? 'Dentro del presupuesto temporal.' : 'Excede el presupuesto temporal: acorta la misión.'} No verifica autonomía de O₂ ni seguridad operacional.`;
+    }
+
+    function switchSection(section) {
+      if (APP.section === section) return;
+      stopEvaSimulation(); closeRealPanorama();
+      const keys = ['origLatLng','destLatLng','isAnalogEarth','analogWeatherOverride','selectedRoute','crewMode','solarScenario','solarLs','ltstWindow','massKg'];
+      APP.sectionStates[APP.section] = {values:Object.fromEntries(keys.map(k=>[k,Array.isArray(APP[k]) ? [...APP[k]] : APP[k]])), center:map.getCenter(), zoom:map.getZoom(), preset:document.getElementById('sel-site-preset').value};
+      APP.section = section;
+      const saved = APP.sectionStates[section];
+      if (saved) Object.assign(APP,saved.values);
+      else { APP.origLatLng=[...PRESETS.jezero_butler.orig]; APP.destLatLng=[...PRESETS.jezero_butler.dest]; APP.isAnalogEarth=false; APP.analogWeatherOverride=null; }
+      const jezero = section === 'jezero';
+      APP.demoTerrain=false;
+      document.getElementById('allow-demo-terrain').checked=false;
+      document.getElementById('allow-demo-terrain').disabled=jezero;
+      document.getElementById('jezero-brief').hidden = !jezero;
+      document.getElementById('sel-site-preset').disabled = jezero;
+      document.getElementById('sel-site-preset').value = saved?.preset || 'jezero_butler';
+      document.getElementById('meteomatics-analog-box').style.display = APP.isAnalogEarth ? 'flex' : 'none';
+      document.getElementById('section-caption').textContent = jezero ? 'Jezero · terreno real obligatorio · ida y regreso' : 'Exploración general · escenarios demostrativos';
+      ['explorer','jezero'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-pressed',String(k===section)));
+      for (const [id,key] of [['ctrl-crew','crewMode'],['ctrl-solar','solarScenario'],['ctrl-ls','solarLs'],['ctrl-ltst','ltstWindow'],['ctrl-mass','massKg']]) document.getElementById(id).value=APP[key];
+      markerOrig.setLatLng(APP.origLatLng); markerDest.setLatLng(APP.destLatLng);
+      map.setMaxBounds(jezero ? [[18,76.5],[19,78]] : null);
+      if (saved) map.setView(saved.center,saved.zoom);
+      else map.fitBounds([APP.origLatLng,APP.destLatLng],{padding:[30,30]});
+      map.invalidateSize(); onMissionUpdated();
+    }
+
+    // =========================================================================
+    // 9. VISOR PANORÁMICO REAL EN PRIMERA PERSONA (PERSEVERANCE + CURIOSITY)
+    // =========================================================================
+    function checkRealPhotosAvailability() {
+      const btn = document.getElementById('btn-pano-toggle');
+      const txt = document.getElementById('pano-btn-text');
+      if (!btn || !txt) return;
+
+      let closestSite = null;
+      let minDistM = Infinity;
+
+      for (const site of VERIFIED_ROVER_SITES) {
+        const dOrig = marsDistMeters(APP.origLatLng[0], APP.origLatLng[1], site.lat, site.lon);
+        const dDest = marsDistMeters(APP.destLatLng[0], APP.destLatLng[1], site.lat, site.lon);
+        const dMin = Math.min(dOrig, dDest);
+        if (dMin < minDistM) {
+          minDistM = dMin;
+          closestSite = site;
+        }
+      }
+
+      if (!APP.isAnalogEarth && closestSite && minDistM <= 2500) {
+        APP.activeRoverSite = closestSite;
+        btn.disabled = false;
+        const roverLabel = closestSite.rover === 'msl' ? 'Curiosity' : 'Perseverance';
+        btn.title = `Vista 1ª Persona (${roverLabel}): ${closestSite.name}`;
+        txt.textContent = APP.panoOpen
+          ? 'Volver al Mapa (M)'
+          : `Vista 1ª Persona (${roverLabel})`;
+      } else {
+        APP.activeRoverSite = null;
+        if (APP.panoOpen) closeRealPanorama();
+        btn.disabled = true;
+        txt.textContent = 'Sin fotos reales en esta zona';
+      }
+    }
+
+    async function loadRealNasaPhotosForSite(site) {
+      APP.realPhotosList = [
+        {
+          url: site.fallbackPhoto,
+          sol: null,
+          camera: site.instrument,
+          title: site.name
+        }
+      ];
+      APP.realPhotoIdx = 0;
+      renderCurrentPanoPhoto();
+
+      if (site.rover === 'mars2020') {
+        try {
+          const rssUrl = `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json&num=10&page=0&order=sol+desc&search=${encodeURIComponent(site.instrument)}`;
+          const res = await fetchWithTimeout(rssUrl, 6000);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.images) && data.images.length > 0) {
+              const fetched = data.images
+                .filter((img) => img.image_files && (img.image_files.large || img.image_files.medium))
+                .slice(0, 6)
+                .map((img) => ({
+                  url: img.image_files.large || img.image_files.medium,
+                  sol: img.sol ?? null,
+                  camera: img.camera?.instrument || site.instrument,
+                  title: img.title || site.name
+                }));
+              if (APP.activeRoverSite === site && fetched.length > 0) APP.realPhotosList = [...APP.realPhotosList, ...fetched];
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    function renderCurrentPanoPhoto() {
+      const item = APP.realPhotosList[APP.realPhotoIdx];
+      if (!item || !APP.activeRoverSite) return;
+
+      const imgEl = document.getElementById('real-nasa-photo');
+      imgEl.onerror = () => {
+        if (imgEl.src !== APP.activeRoverSite.fallbackPhoto) imgEl.src = APP.activeRoverSite.fallbackPhoto;
+      };
+      imgEl.src = item.url;
+      APP.panoPanOffsetPx = 0;
+      imgEl.style.transform = 'translateX(0px)';
+
+      const missionName = APP.activeRoverSite.rover === 'msl' ? 'NASA MSL CURIOSITY' : 'NASA MARS 2020 PERSEVERANCE';
+      document.getElementById('pano-hud-site').textContent = `${missionName} • ${APP.activeRoverSite.name}`;
+      document.getElementById('pano-hud-camera').textContent = `SOL ${item.sol ?? 'sin metadato verificado'} | CÁMARA ${item.camera} (${APP.realPhotoIdx + 1}/${APP.realPhotosList.length})`;
+      document.getElementById('pano-hud-az').textContent = `IMAGEN DE CONTEXTO REGIONAL • ORIENTACIÓN NO VERIFICADA`;
+    }
+
+    function openRealPanorama() {
+      if (!APP.activeRoverSite) return;
+      APP.panoOpen = true;
+      document.getElementById('real-pano-viewer').style.display = 'flex';
+      document.getElementById('vp-title').textContent = `Vista en Primera Persona — ${APP.activeRoverSite.name}`;
+      document.getElementById('pano-btn-text').textContent = 'Volver al Mapa (M)';
+      loadRealNasaPhotosForSite(APP.activeRoverSite);
+    }
+
+    function closeRealPanorama() {
+      APP.panoOpen = false;
+      document.getElementById('real-pano-viewer').style.display = 'none';
+      document.getElementById('vp-title').textContent = 'Cartografía Global de Marte — NASA Mars Trek WMTS (EPSG:4326)';
+      checkRealPhotosAvailability();
+      if (map) map.invalidateSize();
+    }
+
+    // =========================================================================
+    // 10. ACTUALIZACIÓN CENTRAL REACTIVA, DONKI, METEOMATICS Y GEOJSON
+    // =========================================================================
+    function onMissionUpdated() {
+      clearAdvancedPlans();
+      map.eachLayer(layer => {
+        if (layer instanceof L.TileLayer) layer.setOpacity(APP.isAnalogEarth ? 0 : 1);
+      });
+      document.getElementById('vp-title').textContent = APP.isAnalogEarth
+        ? 'Análogo terrestre · terreno sintético · sin mapa base terrestre'
+        : 'Cartografía de Marte · NASA Mars Trek';
+      stopEvaSimulation();
+      const distKm = marsDistMeters(APP.origLatLng[0], APP.origLatLng[1], APP.destLatLng[0], APP.destLatLng[1]) / 1000;
+      const az = marsBearingDeg(APP.origLatLng[0], APP.origLatLng[1], APP.destLatLng[0], APP.destLatLng[1]);
+      document.getElementById('dist-az-summary').textContent = `${distKm.toFixed(2)} km • Az ${Math.round(az)}°`;
+
+      const env = getEnvParams();
+      document.getElementById('lbl-solar').textContent = `${env.dailyMsv.toFixed(2).replace('.', ',')} mSv/d`;
+      document.getElementById('hdr-rad-label').textContent = `RAD: ${env.dailyMsv.toFixed(2).replace('.', ',')} mSv/d`;
+      document.getElementById('hdr-rad-dot').className =
+        APP.solarScenario === 'nominal' ? 'dot' : APP.solarScenario === 'sep_2017' ? 'dot amber' : 'dot red';
+
+      const crewShort = APP.crewMode === 'pair_rover' ? 'Pareja + Rover' : APP.crewMode === 'pair_foot' ? 'Pareja EVA-1/2' : 'Individual';
+      document.getElementById('lbl-crew').textContent = crewShort;
+      document.getElementById('lbl-ltst').textContent = APP.ltstWindow === '1600' ? '16:00' : APP.ltstWindow === '0700' ? '07:00' : 'Polvo';
+      document.getElementById('lbl-ls').textContent = env.lsLabel.split(' ')[0] + ' ' + env.lsLabel.split(' ')[1];
+      document.getElementById('lbl-mass').textContent = `${APP.massKg} kg`;
+
+      document.getElementById('hud-top-left').textContent =
+        `VISOR CASCO xEMU • ${crewShort.toUpperCase()} • Marte esférico R=3396190 m`;
+      document.getElementById('hud-top-right').textContent =
+        `Consumibles: sin telemetría real • RAD: ${env.dailyMsv.toFixed(2)} mSv/d`;
+
+      checkRealPhotosAvailability();
+      computeAllRoutes();
+    }
+
+    async function fetchLiveDonkiSpaceWeather() {
+      const el = document.getElementById('donki-live-status');
+      el.textContent = 'Consultando catálogo DONKI de los últimos 14 días…';
+      const end = new Date().toISOString().slice(0,10);
+      const start = new Date(Date.now()-14*86400000).toISOString().slice(0,10);
+      try {
+        const results = await Promise.all(['SEP','FLR'].map(async type => {
+          const res = await fetchWithTimeout(`https://api.nasa.gov/DONKI/${type}?startDate=${start}&endDate=${end}&api_key=DEMO_KEY`,9000);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (!Array.isArray(data)) throw new Error('Formato de catálogo inválido');
+          return data;
+        }));
+        el.textContent = `Catálogo ${start} a ${end}: ${results[0].length} registros SEP y ${results[1].length} fulguraciones. No determina eventos activos ni exposición local en Marte. El escenario seleccionado no cambia.`;
+      } catch (err) {
+        el.textContent = `Consulta no disponible (${err.message}). Estado solar desconocido; no se interpreta como ausencia de eventos.`;
+      }
+    }
+
+    async function fetchMeteomaticsAnalogWeather() {
+
+
+      const statusEl = document.getElementById('mm-status');
+
+      if (!APP.isAnalogEarth) { statusEl.textContent = 'Selecciona un análogo terrestre.'; return; }
+      statusEl.textContent = 'Consultando meteorología mediante el servidor local…';
+      const [lat, lon] = APP.origLatLng;
+      const url = `/api/weather/analog?lat=${lat}&lon=${lon}`;
+      try {
+        const res = await fetchWithTimeout(url, 12000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: configura METEOMATICS_USER y METEOMATICS_PASSWORD en el servidor`);
+        const json = await res.json();
+        const tC = json.data?.[0]?.coordinates?.[0]?.dates?.[0]?.value;
+        const hPa = json.data?.[1]?.coordinates?.[0]?.dates?.[0]?.value;
+        const windMs = json.data?.[2]?.coordinates?.[0]?.dates?.[0]?.value;
+
+        if (![tC,hPa,windMs].every(Number.isFinite)) throw new Error("Respuesta meteorológica incompleta");
+        APP.analogWeatherOverride = {
+          tempC: Math.round(tC * 10) / 10,
+          mbar: Math.round(hPa * 10) / 10,
+          velFactor: Math.max(0.75, 1.0 - Math.max(0, windMs - 8) * 0.015)
+        };
+        statusEl.textContent = `Meteomatics OK: ${tC}°C, ${hPa} hPa, viento ${windMs} m/s aplicados.`;
+        onMissionUpdated();
+      } catch (err) {
+        statusEl.textContent = `Meteomatics (${err.message}). Usando parámetros análogos supuestos.`;
+      }
+    }
+
+    function exportRoutesGeoJSON() {
+      const features = [
+        {
+          type: 'Feature',
+          properties: { role: 'EVA_ORIGIN', crs: APP.isAnalogEarth ? 'Earth_spherical_R6371008.8m' : 'Mars_spherical_lonlat_R3396190m', crew_mode: APP.crewMode },
+          geometry: { type: 'Point', coordinates: [APP.origLatLng[1], APP.origLatLng[0]] }
+        },
+        {
+          type: 'Feature',
+          properties: { role: 'EVA_DESTINATION', crs: APP.isAnalogEarth ? 'Earth_spherical_R6371008.8m' : 'Mars_spherical_lonlat_R3396190m' },
+          geometry: { type: 'Point', coordinates: [APP.destLatLng[1], APP.destLatLng[0]] }
+        }
+      ];
+
+      ['green', 'blue', 'red'].forEach((k) => {
+        const r = APP.routes[k];
+        if (!r?.executable) return;
+        features.push({
+          type: 'Feature',
+          properties: {
+            route_profile: k,
+            crs: APP.isAnalogEarth ? 'Earth_spherical_R6371008.8m' : 'Mars_spherical_lonlat_R3396190m',
+            distance_3d_km: Number(r.distKm.toFixed(3)),
+            duration_min: Math.round(r.timeMin),
+            model_status: 'exploratory_not_validated',
+            section: APP.section,
+            max_slope_deg: Number(r.maxSlope.toFixed(2)),
+            sky_view_factor_omega_c: Number(r.avgSkyView.toFixed(2)),
+            metabolic_kcal: Math.round(r.totalKcal),
+            o2_kg: Number(r.o2Kg.toFixed(3)),
+            h2o_liters: Number(r.h2oL.toFixed(3)),
+            effective_dose_msv: Number(r.doseMsv.toFixed(4)),
+            reached_goal: Boolean(r.reachedGoal),
+            geometry_valid: Boolean(r.geometryValid),
+            executable: Boolean(r.executable),
+            slope_limit_used_deg: r.slopeLimitUsed,
+            smoothing: r.smoothing,
+            coordinate_note: 'lon/lat en grados marcianos (esfera IAU 2015, R=3396190 m), NO WGS84; 3.ª coordenada = elevación en m'
+          },
+          // Sin ruta alcanzable no se exporta geometría: una línea recta indicativa no debe leerse como trayectoria
+          geometry: r.executable
+            ? {
+                type: 'LineString',
+                coordinates: r.coords.map((ll, i) => [
+                  Number(ll[1].toFixed(6)), Number(ll[0].toFixed(6)), Number(r.elevations[i].toFixed(2))
+                ])
+              }
+            : null
+        });
+      });
+
+      if (APP.section === 'jezero') {
+        for (const [key,r] of Object.entries(APP.returnRoutes).filter(([,r])=>r.executable)) features.push({
+          type:'Feature', properties:{role:'RETURN_TO_BASE',route_profile:key,executable:r.executable,duration_min:r.timeMin,model_status:'exploratory_not_validated',crs:'Mars_spherical_lonlat_R3396190m'},
+          geometry:r.executable ? {type:'LineString',coordinates:r.coords.map((ll,i)=>[ll[1],ll[0],r.elevations[i]])} : null
+        });
+      }
+      const fc = {
+        type: 'FeatureCollection',
+        prototype: true,
+        section: APP.section,
+        dem_source: document.getElementById('dem-source-banner').textContent,
+        coordinate_reference: APP.isAnalogEarth ? 'Earth sphere R=6371008.8m, lon/lat' : 'Mars sphere R=3396190m, lon/lat',
+        name: 'MARS_EVA_NAVIGATOR_ROUTES_IAU_2015_49900',
+        features
+      };
+
+      const blob = new Blob([JSON.stringify(fc, null, 2)], { type: 'application/geo+json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'mars_eva_routes_IAU_2015_49900.geojson';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    const EVIDENCE_CATALOG = {
+      jezero: {mission:'Mars 2020 · Perseverance',instrument:'Mastcam-Z',date:'2021-02-22',sol:null,
+        image:'https://assets.science.nasa.gov/dynamicimage/assets/science/psd/mars/downloadable_items/4/5/45791_PIA24485_K4_ZCAM_main_sol004_Delta_Remnant_unannotated.jpg?fit=clip&w=1200',
+        source:'https://science.nasa.gov/resource/perseverance-view-of-the-delta-in-jezero-crater/',
+        title:'Delta de Jezero',interest:'Sedimentología',reason:'Investigar el contexto de un antiguo sistema de río y lago. La fotografía documenta el delta; los puntos del recorrido son propuestas de observación.'},
+      gale: {mission:'MSL · Curiosity',instrument:'Mastcam',date:'2025-03-09',sol:4476,
+        image:'https://d2pn8kiwq2w21t.cloudfront.net/original_images/jpegPIA26552.jpg',
+        source:'https://www.jpl.nasa.gov/images/pia26552-curiosity-on-the-road-to-boxwork-formations/',
+        title:'Mount Sharp · hacia boxwork',interest:'Geomorfología',reason:'Estudiar el contexto de crestas y fracturas posiblemente relacionadas con agua subterránea. Los puntos propuestos no identifican afloramientos confirmados.'}
+    };
+    function evidenceRegion(lat, lon) {
+      if(lat>=18&&lat<=19&&lon>=76.5&&lon<=78)return 'jezero';
+      if(lat>=-6&&lat<=-4&&lon>=136&&lon<=139)return 'gale';
+      return null;
+    }
+    function evidenceWaypoints(route) {
+      if(!route?.executable)return [];
+      return [.33,.66].map((fraction,index)=>{
+        const i=Math.floor((route.coords.length-1)*fraction);
+        return {name:`W${index+1}`,coordinate:route.coords[i],elevation:route.elevations[i],
+          justification:index?'Comparar cambios de relieve y documentar el paisaje.':'Documentar el contexto geomorfológico desde un punto del recorrido.',
+          status:'Propuesta del planificador; interés local sin verificación instrumental'};
+      });
+    }
+    function drawEvidenceTerrain(canvas, dem, route, angle) {
+      const ctx=canvas.getContext('2d');
+      if(!ctx)return false;
+      const width=canvas.width,height=canvas.height;
+      ctx.fillStyle='#080e1a';ctx.fillRect(0,0,width,height);
+      if(!dem?.bothInsideTif){ctx.fillStyle='#c7d6ec';ctx.font='16px sans-serif';ctx.fillText('Carga un DEM real de la zona para visualizar el terreno.',24,50);return false;}
+      const n=Math.round(Math.sqrt(dem.elev.length));
+      let minimum=Infinity,maximum=-Infinity;
+      for(let i=0;i<dem.elev.length;i++)if(!dem.noDataMask[i]&&Number.isFinite(dem.elev[i])){minimum=Math.min(minimum,dem.elev[i]);maximum=Math.max(maximum,dem.elev[i]);}
+      if(!Number.isFinite(minimum))return false;
+      const span=Math.max(n*dem.dxM,n*dem.dyM,maximum-minimum,1);
+      const zoom=Number(document.getElementById('evidence-zoom')?.value||1);
+      const tilt=Number(document.getElementById('evidence-tilt')?.value||33)*Math.PI/180;
+      const panX=Number(document.getElementById('evidence-pan-x')?.value||0),panY=Number(document.getElementById('evidence-pan-y')?.value||0);
+      const scale=Math.min(width,height)*.72/span*zoom;
+      const cosine=Math.cos(angle),sine=Math.sin(angle);
+      const project=(row,col,z)=>{
+        const x=(col-(n-1)/2)*dem.dxM,y=(row-(n-1)/2)*dem.dyM;
+        const east=x*cosine-y*sine,depth=x*sine+y*cosine;
+        return [width/2+panX+east*scale,height*.62+panY+(depth*Math.sin(tilt)-(z-minimum)*Math.cos(tilt))*scale,depth];
+      };
+      const faces=[];const step=Math.max(1,Math.ceil(n/75));
+      for(let row=0;row<n-1;row+=step)for(let col=0;col<n-1;col+=step){
+        const r2=Math.min(n-1,row+step),c2=Math.min(n-1,col+step);
+        let blocked=false,slope=0;
+        for(let r=row;r<=r2;r++)for(let c=col;c<=c2;c++){
+          const i=r*n+c;if(dem.noDataMask[i]||!Number.isFinite(dem.elev[i]))blocked=true;
+          slope=Math.max(slope,dem.slopeDeg[i]);
+        }
+        if(blocked)continue;
+        const points=[[row,col],[row,c2],[r2,c2],[r2,col]].map(([r,c])=>project(r,c,dem.elev[r*n+c]));
+        faces.push({points,depth:points.reduce((s,p)=>s+p[2],0)/4,slope});
+      }
+      faces.sort((a,b)=>a.depth-b.depth);
+      for(const face of faces){
+        ctx.beginPath();face.points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
+        ctx.fillStyle=face.slope>24?'#ba4545':face.slope>12.5?'#b78048':'#527e80';ctx.fill();
+        ctx.strokeStyle='#142436';ctx.lineWidth=.4;ctx.stroke();
+      }
+      const at=(ll,z)=>project((dem.maxLat-ll[0])/(dem.maxLat-dem.minLat)*n-.5,(ll[1]-dem.minLon)/(dem.maxLon-dem.minLon)*n-.5,z);
+      const marker=(ll,z,name,color)=>{const p=at(ll,z);ctx.fillStyle=color;ctx.beginPath();ctx.arc(p[0],p[1],5,0,Math.PI*2);ctx.fill();ctx.font='bold 14px sans-serif';ctx.fillText(name,p[0]+8,p[1]-8);};
+      const overlays=[APP.guardianRoute,APP.hunterRoute,...(document.getElementById('evidence-all-routes')?.checked?Object.values(APP.routes).filter(r=>r!==route):[])];
+      for(const extra of overlays)if(extra?.executable){
+        ctx.strokeStyle=extra===APP.guardianRoute?'#ffb547':extra===APP.hunterRoute?'#d693ff':{green:'#32ffad',blue:'#48a9ff',red:'#ff7777'}[extra.profileKey];ctx.lineWidth=4;ctx.beginPath();
+        extra.coords.forEach((ll,i)=>{const q=at(ll,extra.elevations[i]);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});ctx.stroke();
+      }
+      if(route?.executable){
+        ctx.strokeStyle={green:'#32ffad',blue:'#48a9ff',red:'#ff7777'}[route.profileKey];ctx.lineWidth=3;ctx.beginPath();
+        route.coords.forEach((ll,i)=>{const p=at(ll,route.elevations[i]);i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);});ctx.stroke();
+        marker(route.coords[0],route.elevations[0],'Origen','#32ffad');
+        marker(route.coords.at(-1),route.elevations.at(-1),'Destino','#ff7777');
+        evidenceWaypoints(route).forEach(point=>marker(point.coordinate,point.elevation,point.name,'#ffe29a'));
+      }
+      if (!route?.executable) {
+        for (const [ll,label,color] of [[APP.origLatLng,'Origen','#32ffad'],[APP.destLatLng,'Destino','#ff7777']]) {
+          if (ll[0]<dem.minLat || ll[0]>dem.maxLat || ll[1]<dem.minLon || ll[1]>dem.maxLon) continue;
+          const cell=dem.latLonToCell(...ll);
+          if(!dem.noDataMask[cell.idx])marker(ll,dem.elev[cell.idx],label,color);
+        }
+      }
+      for(const record of advancedState.records.filter(r=>r.category==='A'&&r.mission===catalogMission())){
+        const ll=record.position;if(ll[0]<dem.minLat||ll[0]>dem.maxLat||ll[1]<dem.minLon||ll[1]>dem.maxLon)continue;
+        const cell=dem.latLonToCell(...ll);if(!dem.noDataMask[cell.idx])marker(ll,dem.elev[cell.idx],record.kind==='photo'?'Foto':record.kind==='station'?'Sol '+record.sol:record.title,'#ffd177');
+      }
+      return true;
+    }
+    function openEvidence(){
+      const mission=catalogMission();
+      if(advancedState.mission!==mission){advancedState.generation++;advancedState.records=[];advancedState.targets=[];advancedState.mission=mission;if(advancedState.evidenceLayer)advancedState.evidenceLayer.clearLayers();
+        document.getElementById('photo-cards').replaceChildren();document.getElementById('history-station').replaceChildren();
+        document.getElementById('history-status').textContent='Carga el catálogo de esta región.';renderHunterTargets();}
+
+      const region=APP.isAnalogEarth?null:evidenceRegion(...APP.destLatLng);
+      const catalog=EVIDENCE_CATALOG[region];
+      const panel=document.getElementById('evidence-panel');panel.hidden=false;
+      document.getElementById('evidence-region').textContent=catalog?`${catalog.title} · ${catalog.mission}`:'Sin evidencia catalogada para esta región';
+      const photo=document.getElementById('evidence-photo');photo.hidden=!catalog;
+      const source=document.getElementById('evidence-source');source.hidden=!catalog;
+      if(catalog){
+        photo.onerror=()=>{photo.hidden=true;document.getElementById('evidence-photo-status').textContent='Imagen no disponible en esta conexión. Consulta la ficha NASA.';};
+        photo.src=catalog.image;photo.alt=catalog.title;
+        source.href=catalog.source;
+        document.getElementById('evidence-photo-status').textContent=`${catalog.mission} · ${catalog.instrument} · ${catalog.date} · Sol ${catalog.sol??'no confirmado en ficha'}. Metadatos transcritos de NASA; imagen regional, sin pose georreferenciada.`;
+      }else document.getElementById('evidence-photo-status').textContent='No se seleccionan fotografías de otra misión.';
+      const route=APP.routes[APP.selectedRoute];
+      document.getElementById('evidence-objectives').textContent=catalog?`${catalog.interest}. ${catalog.reason} `+evidenceWaypoints(route).map(p=>`${p.name}: ${p.justification} (${p.status}).`).join(' '):'Selecciona una región documentada.';
+      const rows=[
+        ['Fotografía',catalog?.source||'Sin fuente',catalog?.mission||'—',catalog?.instrument||'—','Imagen óptica','NASA real, metadatos de ficha'],
+        ['DEM',APP.tifDem?.sourceName||'No cargado','Pendiente de procedencia','Pendiente de producto','Elevación','Archivo aportado; origen NASA sin verificar'],
+        ['Relieve 3D / pendientes','DEM activo','Heredada del archivo','Algoritmo geométrico','Malla y pendiente','Derivado'],
+        ['Ruta / W1 / W2','Planificador local','Misión hipotética','Modelo de costes','Trayectoria y propuestas','Modelo'],
+        ['Tiempo / energía / dosis','Coeficientes del prototipo','Misión hipotética','Modelo exploratorio','Estimaciones','Simulación'],
+        ['Meteomatics','Proveedor externo','Tierra','Servicio meteorológico','Meteorología','Externo, no NASA']
+      ];
+      const body=document.getElementById('evidence-provenance');body.replaceChildren();
+      rows.forEach(values=>{const tr=document.createElement('tr');values.forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.append(td);});body.append(tr);});
+      renderEvidence();
+    }
+    function renderEvidence(){
+      if(document.getElementById('evidence-panel').hidden)return;
+      const dem=APP.activeDem;
+      drawEvidenceTerrain(document.getElementById('evidence-canvas'),dem,APP.routes[APP.selectedRoute],Number(document.getElementById('evidence-angle').value)*Math.PI/180);
+    }
+
+
+    const advancedState={records:[],targets:[],layer:null,evidenceLayer:null,generation:0,planningToken:0};
+    function clearAdvancedPlans(){
+      advancedState.planningToken++;
+      APP.guardianRoute=null;APP.hunterRoute=null;
+      if(advancedState.layer){advancedState.layer.clearLayers();}
+      for(const id of ['guardian-result','hunter-result']){const el=document.getElementById(id);if(el)el.textContent='Plan invalidado: recalcula con el terreno y la misión actuales.';}
+    }
+    function currentAstronaut(){
+      const ll=APP.walkerMarker?.getLatLng();return ll?[ll.lat,ll.lng]:[...APP.origLatLng];
+    }
+    function checkedLeg(dem,from,to,profile='green'){
+      if(!dem?.bothInsideTif)throw Error('Se requiere un DEM real con cobertura de la misión.');
+      for(const ll of [from,to])if(ll.length!==2||!ll.every(Number.isFinite)||ll[0]<dem.minLat||ll[0]>dem.maxLat||ll[1]<dem.minLon||ll[1]>dem.maxLon)throw Error('Punto fuera de cobertura DEM.');
+      const n=Math.sqrt(dem.elev.length);if(!Number.isInteger(n)||n!==GRID_N)throw Error('Malla desactualizada; vuelve a calcular la misión.');
+      return computeSingle3DRoute(dem,dem.latLonToCell(...from),dem.latLonToCell(...to),profile,getEnvParams(),{green:12.5,blue:18.5,red:24}[profile],from,to);
+    }
+    function withHypotheticalBlock(dem,center,radius){
+      if(!dem?.bothInsideTif||!Number.isFinite(radius)||radius<0||radius>10000)throw Error('DEM o radio de bloqueo inválido.');
+      const result={...dem,noDataMask:new Uint8Array(dem.noDataMask)};
+      const n=Math.sqrt(dem.elev.length),padding=Math.hypot(dem.dxM,dem.dyM)/2;
+      for(let r=0;r<n;r++)for(let c=0;c<n;c++){
+        const ll=dem.cellToLatLon(r,c);if(marsDistMeters(...center,...ll)<=radius+padding)result.noDataMask[r*n+c]=1;
+      }
+      return result;
+    }
+    function guardianPlan(dem,from,base,budget,multiplier=1){
+      if(!Number.isFinite(budget)||budget<0||![1,2].includes(multiplier))throw Error('Presupuesto o escenario inválido.');
+      return ['green','blue','red'].map(profile=>{const route=checkedLeg(dem,from,base,profile);return {profile,route,minutes:route.executable?route.timeMin*multiplier:null,withinBudget:route.executable&&route.timeMin*multiplier<=budget};});
+    }
+    // Exhaustive orders/subsets, bounded at five; each directed leg cached once.
+    function hunterPlan(targets,budget,dwell,leg){
+      if(targets.length>5||!Number.isFinite(budget)||budget<0||!Number.isFinite(dwell)||dwell<0)throw Error('Máximo 5 objetivos y tiempos finitos no negativos.');
+      const cache=new Map();const edge=(a,b)=>{const key=a+':'+b;if(!cache.has(key))cache.set(key,leg(a,b));return cache.get(key);};
+      let best={order:[],minutes:0,legs:[]};
+      function visit(at,order,time,legs){
+        if(order.length){const back=edge(at,-1);if(back.executable&&time+back.timeMin<=budget&&(order.length>best.order.length||(order.length===best.order.length&&time+back.timeMin<best.minutes)))best={order:[...order],minutes:time+back.timeMin,legs:[...legs,back]};}
+        for(let i=0;i<targets.length;i++)if(!order.includes(i)){
+          const next=edge(at,i);if(next.executable&&time+next.timeMin+dwell<=budget)visit(i,[...order,i],time+next.timeMin+dwell,[...legs,next]);
+        }
+      }
+      visit(-1,[],0,[]);return {...best,excluded:targets.filter((_,i)=>!best.order.includes(i)),cachedLegs:cache.size};
+    }
+    function overlayAdvanced(route,color){
+      if(!advancedState.layer&&map)advancedState.layer=L.layerGroup().addTo(map);
+      if(route?.executable&&map)L.polyline(route.coords,{color,weight:5,dashArray:'7 5'}).addTo(advancedState.layer);
+      renderEvidence();
+    }
+    function catalogMission(){if(APP.isAnalogEarth)return null;return {jezero:'Perseverance',gale:'Curiosity'}[evidenceRegion(...APP.destLatLng)]||null;}
+    async function fetchCatalog(path){
+      const response=await fetchWithTimeout(path,12000);if(!response.ok)throw Error('Catálogo no disponible. Inicia mars_dem_server.py y abre su dirección local.');return response.json();
+    }
+    function showPhotoCards(records){
+      const container=document.getElementById('photo-cards');container.replaceChildren();
+      for(const r of records.filter(r=>r.kind==='photo')){
+        const card=document.createElement('article');card.style.cssText='display:inline-block;vertical-align:top;max-width:320px;margin:8px;padding:12px;border:1px solid #324d7a';
+        const title=document.createElement('h4');title.textContent=r.title;card.append(title);
+        const metadata=document.createElement('p');metadata.textContent=`${r.mission} · ${r.instrument||'Instrumento sin documentar'} · ${r.date||'Fecha desconocida'} · Sol ${r.sol??'desconocido'} · Categoría ${r.category}. ${r.metadata_status||'Metadatos importados; requieren revisión.'} ${r.distance_m!=null?'Distancia a cámara: '+Math.round(r.distance_m)+' m.':''} Crédito: ${r.credit||'consultar fuente'}. Resolución: ${r.resolution||'no registrada'}. ${r.category==='A'?'Incertidumbre declarada: '+r.uncertainty_m+' m; '+r.crs:'Sin coordenada de captura verificable.'}`;card.append(metadata);
+        if(r.image_url){const a=document.createElement('a');a.href=r.image_url;a.target='_blank';a.rel='noopener';const img=document.createElement('img');img.src=r.thumbnail_url||r.image_url;img.loading='lazy';img.alt=r.title;img.style.width='100%';img.onerror=()=>{img.replaceWith(document.createTextNode('Imagen no disponible; abre la ficha original.'));};a.append(img);card.append(a);}
+        const source=document.createElement('a');source.href=r.source;source.target='_blank';source.rel='noopener';source.textContent='Ficha original y crédito';card.append(source);container.append(card);
+      }
+      if(!container.childNodes.length)container.textContent='No hay fotografías con esos criterios. Las fotografías regionales no se convierten en fotos cercanas sin posición de cámara documentada.';
+    }
+    function renderHunterTargets(){document.getElementById('hunter-targets').textContent=advancedState.targets.map((r,i)=>`${i+1}. ${r.title} [${r.category==='A'?'posición documentada, revisión humana requerida':'hipótesis del usuario'}]`).join(' · ')||'Sin objetivos con coordenadas seleccionados.';}
+    function initAdvancedModules(){
+      document.getElementById('evidence-all-routes').onchange=renderEvidence;
+      document.getElementById('evidence-overview').onclick=()=>{for(const [id,value] of Object.entries({zoom:1,tilt:33,'pan-x':0,'pan-y':0,angle:35}))document.getElementById('evidence-'+id).value=value;renderEvidence();};
+      document.getElementById('evidence-top').onclick=()=>{document.getElementById('evidence-tilt').value=90;renderEvidence();};
+      document.getElementById('history-next').onclick=()=>{const el=document.getElementById('history-station');if(el.options.length){el.selectedIndex=(el.selectedIndex+1)%el.options.length;document.getElementById('history-center').click();}};
+      for(const id of ['zoom','tilt','pan-x','pan-y'])document.getElementById('evidence-'+id).oninput=renderEvidence;
+      for(const id of ['guardian-budget','guardian-radius','guardian-scenario','hunter-budget','hunter-dwell'])document.getElementById(id).addEventListener('input',clearAdvancedPlans);
+      const wrap=(id,output,fn)=>document.getElementById(id).onclick=async()=>{const el=document.getElementById(output);try{await fn(el);}catch(e){el.textContent=e.message;}};
+      wrap('catalog-load','catalog-status',async el=>{
+        const mission=catalogMission();if(!mission)throw Error('Selecciona Jezero o Gale en Marte.');
+        const generation=++advancedState.generation;el.textContent='Cargando evidencia…';
+        const data=await fetchCatalog('/api/catalog?mission='+encodeURIComponent(mission));
+        if(generation!==advancedState.generation||mission!==catalogMission())return;
+        advancedState.records=data.records;showPhotoCards(data.records);
+        if(!advancedState.evidenceLayer&&map)advancedState.evidenceLayer=L.layerGroup().addTo(map);
+        advancedState.evidenceLayer?.clearLayers();
+        for(const r of data.records.filter(r=>r.category==='A')){
+          const detail=document.createElement('div');detail.textContent=`${r.title} · ${r.mission} · ${r.kind} · incertidumbre declarada ${r.uncertainty_m} m. `;
+          const link=document.createElement('a');link.href=r.source;link.target='_blank';link.rel='noopener';link.textContent='Fuente';detail.append(link);
+          L.circleMarker(r.position,{radius:6,color:r.kind==='photo'?'#ffd177':'#b58aff'}).bindPopup(detail).addTo(advancedState.evidenceLayer);
+        }
+        renderEvidence();el.textContent=`${data.records.length} registros de ${mission}. Posición ausente significa evidencia regional, no cercanía demostrada.`;
+        const stations=data.records.filter(r=>r.kind==='station').sort((a,b)=>a.sol-b.sol);const select=document.getElementById('history-station');select.replaceChildren();
+        for(const r of stations){const option=document.createElement('option');option.value=r.id;option.textContent=`Sol ${r.sol}: ${r.title}`;select.append(option);}
+        document.getElementById('history-status').textContent=stations.length?`${stations.length} estaciones discretas; no se inventan tramos entre ellas.`:'Sin estaciones georreferenciadas importadas. El catálogo incluido no constituye una trayectoria histórica.';
+        advancedState.targets=data.records.filter(r=>r.kind==='objective'&&r.category==='A').slice(0,5);renderHunterTargets();
+      });
+      wrap('photos-near','catalog-status',async el=>{
+        const mission=catalogMission(),radius=Number(document.getElementById('photo-radius').value);if(!mission||!Number.isFinite(radius)||radius<=0||radius>100000)throw Error('Región o radio inválido.');
+        const [lat,lon]=currentAstronaut();const data=await fetchCatalog('/api/photos/nearby?'+new URLSearchParams({mission,lat,lon,radius}));if(mission!==catalogMission())return;showPhotoCards(data.records);el.textContent='Solo categoría A: distancia superficial a la cámara, no identificación del objeto retratado.';
+      });
+      wrap('history-center','history-status',el=>{const r=advancedState.records.find(r=>r.id===document.getElementById('history-station').value&&r.mission===catalogMission());if(!r)throw Error('No hay una estación documentada seleccionada.');map.setView(r.position,16);el.textContent=`${r.title} · Sol ${r.sol} · incertidumbre declarada ${r.uncertainty_m} m · ${r.position_source}`;});
+      wrap('guardian-run','guardian-result',el=>{
+        const from=currentAstronaut();stopEvaSimulation();clearAdvancedPlans();
+        const scenario=document.getElementById('guardian-scenario').value;
+        const center=from.map((v,i)=>(v+APP.origLatLng[i])/2);
+        const dem=scenario==='blocked'?withHypotheticalBlock(APP.activeDem,center,Number(document.getElementById('guardian-radius').value)):APP.activeDem;
+        const plans=guardianPlan(dem,from,APP.origLatLng,Number(document.getElementById('guardian-budget').value),scenario==='slow'?2:1);
+        el.textContent=plans.map(p=>`${p.profile}: ${p.route.executable?Math.ceil(p.minutes)+' min; '+(p.withinBudget?'dentro del tiempo indicado':'EXCEDE presupuesto'):p.route.reason}`).join(' | ')+'. Estimaciones del modelo; sin reservas ni capacidad del traje certificadas.';
+        APP.guardianRoute=plans.find(p=>p.profile==='green'&&p.withinBudget)?.route||null;
+        if(scenario==='blocked'&&map){if(!advancedState.layer)advancedState.layer=L.layerGroup().addTo(map);
+          // Use a cell-derived polygon: Leaflet circle radii assume Earth, so no metre-circle here.
+          const outline=[];const n=Math.sqrt(dem.elev.length);
+          for(let i=0;i<dem.noDataMask.length;i++)if(dem.noDataMask[i]&&!APP.activeDem.noDataMask[i])outline.push(dem.cellToLatLon(Math.floor(i/n),i%n));
+          if(outline.length)L.rectangle(L.latLngBounds(outline),{color:'#ffb547',fillOpacity:.1}).bindTooltip('Envolvente de celdas bloqueadas hipotéticas; no observación NASA').addTo(advancedState.layer);
+        }
+        overlayAdvanced(APP.guardianRoute,'#ffb547');
+      });
+      wrap('guardian-follow','guardian-result',el=>{
+        const route=APP.guardianRoute;if(!route?.executable)throw Error('Calcula un retorno verde dentro del presupuesto primero.');
+        stopEvaSimulation();APP.walkerMarker=L.circleMarker(route.coords[0],{radius:7,color:'#fff',fillColor:'#ffb547',fillOpacity:1}).addTo(map);
+        let i=0;el.textContent='Animación ilustrativa del retorno validado geométricamente; velocidad de pantalla sin significado físico.';
+        APP.simInterval=setInterval(()=>{if(APP.guardianRoute!==route){stopEvaSimulation();return;}
+          i=Math.min(route.coords.length-1,i+Math.max(1,Math.ceil(route.coords.length/100)));APP.walkerMarker.setLatLng(route.coords[i]);
+          if(i===route.coords.length-1){clearInterval(APP.simInterval);APP.simInterval=null;el.textContent='Animación finalizada en base; no representa una EVA real.';}
+        },100);
+      });
+      wrap('hunter-add','hunter-result',()=>{if(advancedState.targets.length>=5)throw Error('Máximo 5 objetivos.');advancedState.targets.push({title:'Propuesta '+(advancedState.targets.length+1),position:[...APP.destLatLng],category:'H'});renderHunterTargets();});
+      document.getElementById('hunter-clear').onclick=()=>{advancedState.targets=[];renderHunterTargets();clearAdvancedPlans();};
+      wrap('hunter-run','hunter-result',async el=>{
+        clearAdvancedPlans();const targets=[...advancedState.targets],base=[...APP.origLatLng],dem=APP.activeDem,token=advancedState.planningToken;
+        const budget=Number(document.getElementById('hunter-budget').value),dwell=Number(document.getElementById('hunter-dwell').value);
+        if(!Number.isFinite(budget)||budget<0||!Number.isFinite(dwell)||dwell<0)throw Error('Tiempos inválidos.');
+        const cache=new Map();
+        for(let a=-1;a<targets.length;a++)for(let b=-1;b<targets.length;b++)if(a!==b){
+          el.textContent=`Validando tramos ${cache.size+1}/${targets.length*(targets.length+1)}…`;
+          await new Promise(resolve=>setTimeout(resolve,0));if(token!==advancedState.planningToken)return;
+          cache.set(a+':'+b,checkedLeg(dem,a<0?base:targets[a].position,b<0?base:targets[b].position));
+        }
+        const result=hunterPlan(targets,budget,dwell,(a,b)=>cache.get(a+':'+b));
+        el.textContent=result.order.length?`Orden: ${result.order.map(i=>targets[i].title).join(' → ')} → base. ${Math.ceil(result.minutes)} min con paradas y regreso. ${result.excluded.length} objetivos excluidos. Maximiza número de visitas; desempata por tiempo, usando tramos verdes.`:'No hay circuito factible dentro del presupuesto para los objetivos seleccionados.';
+        if(result.order.length){APP.hunterRoute={executable:true,coords:result.legs.flatMap(r=>r.coords),elevations:result.legs.flatMap(r=>r.elevations)};overlayAdvanced(APP.hunterRoute,'#d693ff');}
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('open-evidence').onclick=openEvidence;
+      document.getElementById('close-evidence').onclick=()=>{document.getElementById('evidence-panel').hidden=true;document.getElementById('open-evidence').focus();};
+      document.getElementById('evidence-angle').oninput=renderEvidence;
+      initAdvancedModules();
+      document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('evidence-panel').hidden=true;});
+      if (typeof L === 'undefined') {
+        document.getElementById('dem-source-banner').textContent = 'No se pudo cargar Leaflet. Comprueba la conexión a Internet y recarga la página.';
+        return;
+      }
+      initMap();
+      document.getElementById('allow-demo-terrain').onchange=e=>{APP.demoTerrain=e.target.checked;onMissionUpdated();};
+      document.getElementById('btn-nearby-safe').onclick=proposeNearbySafePoints;
+      document.getElementById('tab-explorer').onclick = () => switchSection('explorer');
+      document.getElementById('tab-jezero').onclick = () => switchSection('jezero');
+      document.getElementById('mission-fit').onclick = () => {
+        if (APP.tifDem) { const b=APP.tifDem.fullBbox; map.fitBounds([[b[1],b[0]],[b[3],b[2]]]); }
+      };
+      ['mission-budget','mission-science'].forEach(id=>document.getElementById(id).addEventListener('input',renderMissionSummary));
+
+      // Selector de Modo de Pantalla (Consola Hábitat / Tableta Campo / HUD Casco)
+      document.querySelectorAll('.ff-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.ff-btn').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          APP.formFactor = btn.dataset.ff;
+          document.body.className = APP.formFactor === 'tablet' ? 'mode-tablet' : APP.formFactor === 'hud' ? 'mode-hud' : '';
+          if (map) setTimeout(() => map.invalidateSize(), 120);
+        });
+      });
+
+      // Modos de clic en mapa
+      const btnDest = document.getElementById('btn-mode-dest');
+      const btnOrig = document.getElementById('btn-mode-orig');
+      btnDest.addEventListener('click', () => {
+        APP.clickMode = 'dest';
+        btnDest.className = 'mode-pill active-dest';
+        btnOrig.className = 'mode-pill';
+      });
+      btnOrig.addEventListener('click', () => {
+        APP.clickMode = 'orig';
+        btnOrig.className = 'mode-pill active-orig';
+        btnDest.className = 'mode-pill';
+      });
+
+      // Checkboxes de capas científicas superpuestas
+      document.getElementById('chk-layer-mineral').addEventListener('change', (e) => {
+        APP.layers.mineral = e.target.checked;
+        renderThematicLayers(APP.activeDem);
+      });
+      document.getElementById('chk-layer-hazard').addEventListener('change', (e) => {
+        APP.layers.hazard = e.target.checked;
+        renderThematicLayers(APP.activeDem);
+      });
+      document.getElementById('chk-layer-shield').addEventListener('change', (e) => {
+        APP.layers.shield = e.target.checked;
+        renderThematicLayers(APP.activeDem);
+      });
+      document.getElementById('chk-layer-pnr').addEventListener('change', (e) => {
+        APP.layers.pnr = e.target.checked;
+        renderThematicLayers(APP.activeDem);
+      });
+
+      // Presets de sitios científicos
+      document.getElementById('sel-site-preset').addEventListener('change', (e) => {
+        const p = PRESETS[e.target.value];
+        if (!p) return;
+        stopEvaSimulation();
+        APP.isAnalogEarth = Boolean(p.analog);
+        APP.analogWeatherOverride = null;
+        document.getElementById('meteomatics-analog-box').style.display = p.analog ? 'flex' : 'none';
+        APP.origLatLng = [...p.orig];
+        APP.destLatLng = [...p.dest];
+        markerOrig.setLatLng(APP.origLatLng);
+        markerDest.setLatLng(APP.destLatLng);
+        map.setView([(p.orig[0] + p.dest[0]) / 2, (p.orig[1] + p.dest[1]) / 2], p.zoom);
+        onMissionUpdated();
+      });
+
+      // Simulación EVA en tiempo real y contingencia solar en vivo
+      document.getElementById('btn-sim-eva').addEventListener('click', startEvaSimulation);
+      document.getElementById('btn-sim-stop').addEventListener('click', stopEvaSimulation);
+      document.getElementById('btn-sim-storm').addEventListener('click', () => {
+        APP.solarScenario = 'sep_2017';
+        document.getElementById('ctrl-solar').value = 'sep_2017';
+        APP.selectedRoute = 'red'; // Seleccionar perfil de prioridad temporal (no es orden de retorno)
+        onMissionUpdated();
+      });
+
+      document.getElementById('btn-export-geojson').addEventListener('click', exportRoutesGeoJSON);
+      document.getElementById('btn-fetch-donki').addEventListener('click', fetchLiveDonkiSpaceWeather);
+      document.getElementById('btn-fetch-meteomatics').addEventListener('click', fetchMeteomaticsAnalogWeather);
+
+      document.getElementById('btn-connect-tif').addEventListener('click', () => tryConnectBackendOrPrecomputed(false));
+      document.getElementById('input-local-tif').addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) handleLocalGeoTiffUpload(e.target.files[0]);
+      });
+
+      // Controles reactivos
+      document.getElementById('ctrl-crew').addEventListener('change', (e) => {
+        APP.crewMode = e.target.value;
+        onMissionUpdated();
+      });
+      document.getElementById('ctrl-solar').addEventListener('change', (e) => {
+        APP.solarScenario = e.target.value;
+        onMissionUpdated();
+      });
+      document.getElementById('ctrl-ls').addEventListener('change', (e) => {
+        APP.solarLs = e.target.value;
+        onMissionUpdated();
+      });
+      document.getElementById('ctrl-ltst').addEventListener('change', (e) => {
+        APP.ltstWindow = e.target.value;
+        onMissionUpdated();
+      });
+      document.getElementById('ctrl-mass').addEventListener('input', (e) => {
+        APP.massKg = Number(e.target.value);
+        onMissionUpdated();
+      });
+
+      // Sincronización interactiva del Perfil Altimétrico SVG con el Mapa
+      const elevSvg = document.getElementById('elev-profile-svg');
+      elevSvg.addEventListener('mousemove', (e) => {
+        const activeR = APP.routes[APP.selectedRoute];
+        if (!activeR?.executable || !APP.activeDem) return;
+        const rect = elevSvg.getBoundingClientRect();
+        const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const idx = Math.min(activeR.coords.length - 1, Math.floor(t * (activeR.coords.length - 1)));
+        const pos = activeR.coords[idx];
+        const elevM = activeR.elevations[idx];
+        const cellIdx = activeR.cells[idx]?.idx ?? 0;
+        const slp = APP.activeDem.slopeDeg[cellIdx] || 0;
+        const omega = APP.activeDem.skyView[cellIdx] || 1;
+
+        const cursorLine = document.getElementById('svg-cursor-line');
+        if (cursorLine) {
+          const svgX = 8 + t * (360 - 16);
+          cursorLine.setAttribute('x1', svgX.toFixed(1));
+          cursorLine.setAttribute('x2', svgX.toFixed(1));
+        }
+
+        if (!APP.profileSyncMarker) {
+          APP.profileSyncMarker = L.circleMarker(pos, {
+            radius: 6,
+            color: '#00d2ff',
+            weight: 2,
+            fillColor: '#fff',
+            fillOpacity: 0.9
+          }).addTo(map);
+        } else {
+          APP.profileSyncMarker.setLatLng(pos);
+        }
+
+        document.getElementById('elev-hover-readout').textContent =
+          `Punto ${Math.round(t * 100)}%: Elevación ${Math.round(elevM)} m • Pendiente ${slp.toFixed(1)}° • Cielo abierto Ωc=${omega.toFixed(2)}`;
+      });
+
+      elevSvg.addEventListener('mouseleave', () => {
+        if (APP.profileSyncMarker && map) {
+          map.removeLayer(APP.profileSyncMarker);
+          APP.profileSyncMarker = null;
+        }
+      });
+
+      // Visor Panorámico Real
+      document.getElementById('btn-pano-toggle').addEventListener('click', () => {
+        if (APP.panoOpen) closeRealPanorama();
+        else openRealPanorama();
+      });
+      document.getElementById('btn-close-pano').addEventListener('click', closeRealPanorama);
+      document.getElementById('btn-prev-photo').addEventListener('click', () => {
+        if (APP.realPhotosList.length === 0) return;
+        APP.realPhotoIdx = (APP.realPhotoIdx - 1 + APP.realPhotosList.length) % APP.realPhotosList.length;
+        renderCurrentPanoPhoto();
+      });
+      document.getElementById('btn-next-photo').addEventListener('click', () => {
+        if (APP.realPhotosList.length === 0) return;
+        APP.realPhotoIdx = (APP.realPhotoIdx + 1) % APP.realPhotosList.length;
+        renderCurrentPanoPhoto();
+      });
+
+      const dragArea = document.getElementById('pano-drag-area');
+      const photoEl = document.getElementById('real-nasa-photo');
+      dragArea.addEventListener('mousedown', (e) => {
+        APP.isDraggingPhoto = true;
+        APP.dragStartX = e.clientX - APP.panoPanOffsetPx;
+      });
+      window.addEventListener('mouseup', () => { APP.isDraggingPhoto = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!APP.isDraggingPhoto || !APP.panoOpen) return;
+        const maxPan = Math.max(120, (photoEl.offsetWidth - dragArea.offsetWidth) / 2);
+        APP.panoPanOffsetPx = Math.max(-maxPan, Math.min(maxPan, e.clientX - APP.dragStartX));
+        photoEl.style.transform = `translateX(${APP.panoPanOffsetPx}px)`;
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'm' || e.key === 'M') {
+          if (APP.panoOpen) closeRealPanorama();
+          else if (APP.activeRoverSite) openRealPanorama();
+        }
+      });
+
+      onMissionUpdated();
+      tryConnectBackendOrPrecomputed(true);
+    });
+  </script>
+</body>
+</html>
