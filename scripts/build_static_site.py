@@ -52,13 +52,22 @@ def build(output: Path, dem: Path) -> None:
         raise FileNotFoundError("Three.js core module missing. Run npm install.")
     shutil.copy2(three_core, output / "vendor" / "three.core.js")
     extras = ROOT / "node_modules" / "three" / "examples" / "jsm"
-    for relative in ("loaders/GLTFLoader.js", "utils/BufferGeometryUtils.js"):
+    for relative in ("loaders/GLTFLoader.js", "loaders/DRACOLoader.js", "utils/BufferGeometryUtils.js"):
         source_mod = extras / relative
         if not source_mod.is_file():
             raise FileNotFoundError(f"Three.js addon not installed: {relative}")
         out_file = output / "vendor" / relative
         out_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_mod, out_file)
+    # Official NASA Z-2 glTF uses KHR_draco_mesh_compression.
+    # Ship the WASM decoder locally so the web demo works fully offline.
+    decoder_dir = output / "vendor" / "draco"
+    decoder_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("draco_wasm_wrapper.js", "draco_decoder.wasm", "draco_decoder.js"):
+        decoder_file = extras / "libs" / "draco" / name
+        if not decoder_file.is_file():
+            raise FileNotFoundError(f"Local Draco decoder missing: {name}")
+        shutil.copy2(decoder_file, decoder_dir / name)
     astronaut = ROOT / "assets" / "astronaut_z2.glb"
     astronaut_meta = ROOT / "assets" / "astronaut_manifest.json"
     if astronaut.is_file() and astronaut_meta.is_file():
