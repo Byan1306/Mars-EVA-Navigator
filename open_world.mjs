@@ -301,6 +301,7 @@ function frame() {
   if(now-lastChunkUpdate>700){refreshTiles();lastChunkUpdate=now;}
   if(now-lastHud>140){updateHud();lastHud=now;}
   renderer.render(scene,camera);
+  document.body.dataset.visibleTriangles=String(renderer.info.render.triangles);
 }
 async function init() {
   try {
