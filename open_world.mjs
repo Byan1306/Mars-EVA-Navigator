@@ -151,6 +151,7 @@ function setCamera(value) {
     orbitDistance=clamp(Math.max(orbitDistance,450),60,2200);
     if(pitch>-.35)pitch=-.55;
   }
+  if(camera){camera.fov=mode==='third'?64:72;camera.updateProjectionMatrix();}
   cameraModes.forEach(name=>{
     const id={first:'cameraFirst',third:'cameraThird',fly:'cameraFly',
       orbit:'cameraOrbit',top:'cameraTop'}[name];
@@ -221,10 +222,10 @@ function updateCamera() {
     camera.up.set(0,1,0);
     camera.lookAt(camera.position.clone().add(forward));
   } else if(mode==='third') {
-    const distance=6.7;
+    const distance=4.5;
     let camX=player.x-Math.sin(yaw)*distance;
     let camZ=player.z+Math.cos(yaw)*distance;
-    let camY=player.y+2.9+Math.sin(-pitch)*3.4;
+    let camY=player.y+2.45+Math.sin(-pitch)*2.0;
     const h=C.sample(d,camX,camZ);
     if(h!==null) camY=Math.max(camY,h-d.ref+2.5);
     camera.position.set(camX,camY,camZ);
