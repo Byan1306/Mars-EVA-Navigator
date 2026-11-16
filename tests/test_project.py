@@ -87,6 +87,9 @@ class WebTests(unittest.TestCase):
             self.assertIn('javascript', client.get('/open_world_core.js').headers.get('content-type',''))
             self.assertEqual(client.get('/vendor/three.module.js').status_code, 200)
             self.assertEqual(client.get('/vendor/three.core.js').status_code, 200)
+            self.assertEqual(client.get('/open_world_visuals.mjs').status_code, 200)
+            self.assertEqual(client.get('/vendor/loaders/GLTFLoader.js').status_code, 200)
+            self.assertEqual(client.get('/vendor/utils/BufferGeometryUtils.js').status_code, 200)
             self.assertEqual(client.get('/node_modules/three/build/three.module.js').status_code, 404)
             self.assertEqual(client.get('/jezero_ortho.jpg').status_code, 404)
 
