@@ -20,3 +20,9 @@ venv/
 *.tif.part
 *.tiff.part
 *.img.part
+
+# Generated science build. Release workflow publishes JSON from validated USGS data.
+_site/
+jezero_dem_precomputed.json
+*.tif.provenance.json
+*.tiff.provenance.json

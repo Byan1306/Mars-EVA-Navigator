@@ -731,7 +731,14 @@
       box-shadow: 0 0 14px var(--cyan);
     }
     [hidden] { display: none !important; }
-    .section-nav { display:flex; gap:10px; padding:10px 18px; align-items:center; flex-wrap:wrap; background:#0c1320; border-bottom:1px solid #324d7a; }
+    .section-nav { display:flex; gap:10px; padding:9px 18px; align-items:center; flex-wrap:wrap; background:#0c1320; border-bottom:1px solid #324d7a; }
+    .section-nav button.mini-btn { width:auto; flex:0 0 auto; min-width:170px; padding:9px 15px; border-radius:8px; text-align:center; }
+    .section-nav #section-caption { margin-left:auto; max-width:35vw; text-align:right; line-height:1.4; }
+    @media(max-width:730px) {
+      .section-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); padding:8px; gap:5px; }
+      .section-nav button.mini-btn { min-width:0; font-size:10px; padding:8px 4px; white-space:normal; }
+      .section-nav #section-caption { grid-column:1/-1; margin:0; max-width:none; text-align:left; }
+    }
     .section-nav button[aria-pressed="true"] { border-color:#00d2ff; background:#17364b; color:#fff; }
     #section-caption { font-size:12px; color:#93a7c9; }
     #jezero-brief { border-color:#00d2ff; }
@@ -1733,6 +1740,8 @@
         validFraction,
         cellSizeM: Number(data.cell_size_m) || 25,
         sourceResolutionM: data.source_resolution_m_approx || null,
+        sourceUrl: (typeof data.source_url === 'string' && /^https:\/\/planetarymaps\.usgs\.gov\/mosaic\/mars2020_trn\//.test(data.source_url)) ? data.source_url : null,
+        sourceSHA256: (typeof data.source_sha256 === 'string' && /^[a-f0-9]{64}$/.test(data.source_sha256)) ? data.source_sha256 : null,
         downsampling: Number(data.downsampling_factor_approx) || null
       };
 
@@ -3246,6 +3255,16 @@
         prototype: true,
         section: APP.section,
         dem_source: document.getElementById('dem-source-banner').textContent,
+        dem_provenance: APP.tifDem ? {
+          source_file: APP.tifDem.sourceName,
+          official_source_url: APP.tifDem.sourceUrl,
+          original_geotiff_sha256: APP.tifDem.sourceSHA256,
+          published_source_resolution_m: APP.tifDem.sourceResolutionM,
+          sampled_cell_size_m: APP.activeDem?.cellSizeM ?? null,
+          valid_fraction: APP.tifDem.validFraction,
+          source_bbox_lonlat: APP.tifDem.fullBbox,
+          spatial_limitations: 'DEM-derived route, not verified by astronauts or rover. Features below grid size may be missed.'
+        } : null,
         coordinate_reference: APP.isAnalogEarth ? 'Earth sphere R=6371008.8m, lon/lat' : 'Mars sphere R=3396190m, lon/lat',
         name: 'MARS_EVA_NAVIGATOR_ROUTES_IAU_2015_49900',
         features

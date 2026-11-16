@@ -141,13 +141,39 @@ def curiosity_panorama_renderer():
     return FileResponse(path, media_type='application/javascript')
 
 
+@app.get('/jezero_dem_precomputed.json', include_in_schema=False)
+def static_science_dem():
+    """Make a locally generated, reviewed JSON available without exposing the GeoTIFF."""
+    path = BASE_DIR / 'jezero_dem_precomputed.json'
+    if not path.is_file():
+        raise HTTPException(404, 'No public precomputed Jezero DEM has been generated.')
+    return FileResponse(path, media_type='application/json')
+
+
 @app.get('/api/status')
 def estado():
+    """Never report a malformed/terrestrial raster as an active Mars DEM."""
     try:
         path = encontrar_tif()
-        return {'status': 'activo', 'tif_detectado': path.name}
+        with rasterio.open(path) as src:
+            validar_raster(src)
+            bounds = bounds_marcianos(src)
+            return {
+                'status': 'activo',
+                'tif_detectado': path.name,
+                'crs': src.crs.to_string(),
+                'full_bbox': bounds,
+                'source_width': src.width,
+                'source_height': src.height,
+                'source_resolution': list(src.res),
+                'science_status': 'DEM georreferenciado validado; no certifica seguridad EVA',
+            }
     except HTTPException as exc:
-        return {'status': 'sin_dem', 'tif_detectado': None, 'detail': exc.detail}
+        status = 'sin_dem' if exc.status_code == 404 else 'dem_invalido'
+        return {'status': status, 'tif_detectado': None, 'detail': exc.detail}
+    except (rasterio.errors.RasterioError, ValueError, OSError) as exc:
+        return {'status': 'dem_invalido', 'tif_detectado': None,
+                'detail': 'El archivo encontrado no supera la validación del DEM.'}
 
 
 @app.get('/api/dem/jezero')

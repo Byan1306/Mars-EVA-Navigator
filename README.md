@@ -101,6 +101,32 @@ The root [index.html](index.html) redirects to the interactive application. GitH
 
 Enable GitHub Pages under **Settings → Pages → Deploy from a branch → main / (root)** after merging.
 
+## Mission GENESIS — verified science release
+
+The project now includes a **repeatable USGS Jezero DEM deployment pipeline** and
+**immersive navigation between documented Curiosity photo stations**. The original
+2D EVA planner, three route profiles, NASA Mars Trek maps, evidence panels,
+emergency-return models and local DEM backend remain intact.
+
+- **Scientifically sourced:** download the official USGS Mars 2020 CTX DTM
+  (20 m/pixel) or its public PDS S3 mirror and retain SHA-256/provenance.
+- **Public site:** automatically build a reviewed Jezero 440×440 precomputed
+  elevation JSON (real DEM, coarser resampling) and deploy with GitHub Actions.
+- **Curiosity viewer:** Next/Previous documented panoramas, keyboard arrows and
+  full screen, with explicit labeling of gaps between photographic stations.
+- **Scientific exports:** GeoJSON includes the source DEM identity, original
+  source resolution, checksum when available, validity fraction and limitations.
+- **Safety:** invalid/missing DEM is reported, never replaced silently with
+  fabricated elevations for Jezero mission.
+
+**One-time site setup:** repository **Settings → Pages → Source → GitHub Actions**.
+The workflow `Publish Mars EVA Navigator with verified Jezero DEM` downloads
+and validates data before publishing. Do not claim the Pages release has real
+terrain until this workflow completes successfully. No credentials are needed
+for the public USGS CTX data.
+
+See [Scientific evidence, limitations, deployment and demo checklist](docs/SCIENTIFIC_EVIDENCE.md).
+
 ### Reproducible Jezero elevations
 
 After installing Python dependencies, obtain a suitable Jezero GeoTIFF from the official USGS Mars 2020 mapping products (CTX or HiRISE). The repository does not include these large source datasets.

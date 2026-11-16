@@ -211,3 +211,28 @@
 #curiosity-explorer #curiosity-photo-canvas[hidden]{display:none!important}
 #curiosity-explorer #curiosity-photo-error[hidden]{display:none!important}
 #curiosity-explorer #curiosity-photo-error {z-index:1}
+
+/* Full-viewport photographic station navigator. No invented views between NASA frames. */
+#curiosity-explorer .curiosity-station-nav{
+  display:flex;align-items:center;justify-content:center;gap:14px;
+  background:#0c1218;border-bottom:1px solid #343e46;
+  padding:9px 16px;flex-wrap:wrap;
+}
+#curiosity-explorer .curiosity-station-nav span{
+  flex:1;min-width:180px;text-align:center;
+  color:#becad6;font:600 10px/1.5 Consolas,monospace;
+  letter-spacing:.035em;
+}
+#curiosity-explorer .curiosity-station-nav button{
+  padding:9px 15px;background:#1b2833;border-color:#455460;
+  color:#ffcfac;font-size:11px;white-space:nowrap;
+}
+#curiosity-explorer .curiosity-station-nav button:disabled{cursor:not-allowed}
+#curiosity-explorer #curiosity-photo-dialog:fullscreen{
+  width:100vw;height:100vh;background:#05070a;
+}
+@media(max-width:820px){
+  #curiosity-explorer .curiosity-station-nav{gap:6px;padding:8px}
+  #curiosity-explorer .curiosity-station-nav span{order:-1;flex-basis:100%}
+  #curiosity-explorer .curiosity-station-nav button{padding:7px 9px}
+}
