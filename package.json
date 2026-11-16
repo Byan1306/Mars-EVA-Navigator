@@ -1,0 +1,12 @@
+{
+  "name": "mars-eva-navigator-world",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Locally vendored Three.js for scientific Mars DEM rendering.",
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "scripts": {
+    "test:world": "node --test tests/open-world-core.test.cjs"
+  }
+}
