@@ -1,0 +1,96 @@
+name: Scientific Jezero 60km regional exploration build
+
+on:
+  push:
+    branches: [feature/jezero-60km-named-region]
+    paths:
+      - 'surface_region_60km/**'
+      - '.github/workflows/jezero-60km.yml'
+  pull_request:
+    branches: [feature/jezero-hirise-1m-surface]
+    paths:
+      - 'surface_region_60km/**'
+      - '.github/workflows/jezero-60km.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jezero-60km-scientific-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install geospatial scientific dependencies
+        run: python -m pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Three.js and Playwright from package.json
+        run: npm install --no-audit --no-fund
+      - name: Validate code syntax
+        run: |
+          python -m compileall -q surface_region_60km/
+          node --check surface_region_60km/region_world.mjs
+          node --check surface_region_60km/smoke_region.cjs
+      - name: Download and produce real USGS 60km CTX heights
+        timeout-minutes: 11
+        run: |
+          python surface_region_60km/prepare_region.py --no-photo \
+            --output _region60km/Jezero_60km
+          python surface_region_60km/verify_region.py _region60km/Jezero_60km
+          python surface_region_60km/build_region.py _region60km/Jezero_60km
+      - name: Preserve immediate 60km measured terrain + landmark labels
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jezero_60km_Real_DEM_20m_Places_First
+          path: _region60km/Jezero_60km/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Generate original NASA/USGS 5m regional photo textures
+        id: ortho
+        continue-on-error: true
+        timeout-minutes: 18
+        run: |
+          python surface_region_60km/prepare_region.py \
+            --output _region60km/Jezero_60km_ortho
+          python surface_region_60km/verify_region.py _region60km/Jezero_60km_ortho
+          python surface_region_60km/build_region.py _region60km/Jezero_60km_ortho
+      - name: Use photographic region when valid; otherwise keep verified DEM only
+        run: |
+          if [ "${{ steps.ortho.outcome }}" = "success" ]; then
+            rm -rf _region60km/Jezero_60km
+            mv _region60km/Jezero_60km_ortho _region60km/Jezero_60km
+            echo "Authentic 5m CTX ortho and 20m CTX DEM completed"
+          else
+            echo "::warning::Official ortho was unavailable; delivering real 60km CTX DEM with labels only."
+          fi
+          python surface_region_60km/verify_region.py _region60km/Jezero_60km
+      - name: Browser smoke test of real terrain and official place names
+        continue-on-error: true
+        timeout-minutes: 4
+        run: node surface_region_60km/smoke_region.cjs
+      - name: Publish final measured 60km world web package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jezero_60km_Real_Surface_Named_Places
+          path: _region60km/Jezero_60km/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish screenshots and browser validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jezero_60km_Geospatial_Chrome_Evidence
+          path: surface_region_60km/_evidence/
+          if-no-files-found: warn
+          retention-days: 7
