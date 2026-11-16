@@ -747,6 +747,7 @@
     #evidence-panel td,#evidence-panel th {padding:10px;border-bottom:1px solid #324d7a;text-align:left;font-size:12px;}
     #evidence-panel a {color:#00d2ff;}
   </style>
+  <link rel="stylesheet" href="./curiosity_explorer.css">
 </head>
 <body>
 
@@ -820,6 +821,7 @@
   <nav class="section-nav" aria-label="Apartados del proyecto">
     <button id="tab-explorer" class="mini-btn" aria-pressed="true">Explorador de Marte · 2D</button>
     <button id="tab-jezero" class="mini-btn" aria-pressed="false">Misión Jezero · 2D</button>
+    <button id="tab-curiosity" class="mini-btn" aria-pressed="false">🟠 Ruta Curiosity · 360°</button>
     <span id="section-caption">Exploración general · escenarios demostrativos</span>
   </nav>
   <!-- ESPACIO PRINCIPAL -->
@@ -1120,6 +1122,83 @@
         <div style="font-family: var(--font-mono); font-size: 0.67rem;">
           Clic en cualquier parte de Marte • Esfera IAU 2015 (R = 3.396.190 m)
         </div>
+      </div>
+    </section>
+
+
+    <!-- MODULE: CURIOSITY HISTORICAL MISSION (independent from hypothetical EVA routes) -->
+    <section id="curiosity-explorer" hidden aria-label="Ruta histórica del rover Curiosity en Marte">
+      <aside id="curiosity-panel" aria-label="Controles de Curiosity">
+        <div class="curiosity-actions" style="align-items:center;justify-content:space-between">
+          <span class="curiosity-kicker">NASA MSL • Gale Crater</span>
+          <button id="curiosity-close" type="button">✕ Salir</button>
+        </div>
+        <h2>Curiosity · el recorrido completo</h2>
+        <p>Explora el trayecto histórico registrado desde 2012. La línea completa procede de NASA/JPL-Caltech, compilada cronológicamente por azmth.space. Los sols intermedios son interpolados; los panoramas corresponden a sols documentados por NASA.</p>
+        <div class="curiosity-stat-grid">
+          <div class="curiosity-stat"><strong id="curiosity-point-count">—</strong><small>Vértices publicados</small></div>
+          <div class="curiosity-stat"><strong id="curiosity-max-sol">—</strong><small>Sol final disponible</small></div>
+          <div class="curiosity-stat"><strong id="curiosity-trace-length">—</strong><small>Longitud geométrica del trazo, no odometría</small></div>
+          <div class="curiosity-stat"><strong id="curiosity-last-update">—</strong><small>Fecha de datos</small></div>
+        </div>
+        <div id="curiosity-data-status" role="status" aria-live="polite">Pulsa «Ruta Curiosity» para consultar la trayectoria.</div>
+        <div class="curiosity-card">
+          <h3>Máquina del tiempo marciana</h3>
+          <label for="curiosity-sol-slider"><strong id="curiosity-sol-label">SOL —</strong> · <span id="curiosity-pos-label">Coordenadas no cargadas</span></label>
+          <input id="curiosity-sol-slider" type="range" min="0" max="5000" value="0" step="1">
+          <div id="curiosity-years"><span>2012 · aterrizaje</span><span>Último sol cargado</span></div>
+          <p id="curiosity-year-note">La cronología se carga desde la fuente externa, sin posiciones inventadas.</p>
+          <div class="curiosity-actions">
+            <button id="curiosity-restart" type="button" disabled>⏮ Inicio</button>
+            <button id="curiosity-play" type="button" disabled>▶ Recorrer misión</button>
+            <button id="curiosity-latest" type="button" disabled>⏭ Última posición</button>
+          </div>
+          <div class="curiosity-actions" style="margin-top:8px;align-items:center">
+            <label for="curiosity-sol-input">Ir al sol</label>
+            <input id="curiosity-sol-input" type="number" min="0" max="6000" value="0">
+            <button id="curiosity-fit" type="button">Ver ruta completa</button>
+          </div>
+        </div>
+        <div class="curiosity-actions">
+          <button id="curiosity-reload" type="button">↻ Actualizar datos</button>
+          <button id="curiosity-export" type="button" disabled>↓ GeoJSON</button>
+        </div>
+        <div class="curiosity-card">
+          <h3>Panoramas 360° auténticos · <span id="curiosity-panorama-count">—</span> paradas</h3>
+          <p>Selecciona un panorama para centrar su sol en el mapa y explorar el mosaico horizontal. No existe una fotografía 360° para todos los metros o cada sol del recorrido.</p>
+          <div id="curiosity-panorama-list"></div>
+        </div>
+        <div class="curiosity-card">
+          <h3>Procedencia y alcance</h3>
+          <p id="curiosity-source-description">NASA/JPL-Caltech, compilación azmth.space CC BY 4.0.</p>
+          <p>El mapa de fondo es el mosaico Viking de NASA Mars Trek (232 m); no debe confundirse su detalle visual con la precisión de la geometría de la ruta. Ni este recorrido histórico ni sus fotos certifican una ruta EVA segura.</p>
+          <div class="curiosity-panel-links">
+            <a href="https://science.nasa.gov/mission/msl-curiosity/location-map/" target="_blank" rel="noopener noreferrer">Mapa oficial NASA</a>
+            <a href="https://azmth.space/mars/data" target="_blank" rel="noopener noreferrer">Datos y licencia CC BY 4.0</a>
+            <a href="https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json" target="_blank" rel="noopener noreferrer">Waypoints NASA MMGIS</a>
+            <a id="curiosity-raw-images" href="https://mars.nasa.gov/msl/multimedia/raw-images/" target="_blank" rel="noopener noreferrer">Fotografías NASA del sol seleccionado</a>
+          </div>
+        </div>
+      </aside>
+      <div id="curiosity-map-wrap">
+        <div id="curiosity-map" role="application" aria-label="Mapa histórico del recorrido de Curiosity"></div>
+        <div id="curiosity-map-loading" role="status">Cargando recorrido documentado…</div>
+        <div id="curiosity-map-caption">La ruta se cargará desde registros externos verificables; no se dibuja una línea artificial.</div>
+        <section id="curiosity-photo-dialog" class="curiosity-photo-dialog" hidden role="dialog" aria-label="Visor panorámico NASA Curiosity" aria-modal="true">
+          <div class="curiosity-photo-toolbar">
+            <strong id="curiosity-photo-title">Panorámica NASA</strong>
+            <div class="curiosity-actions" style="align-items:center">
+              <label for="curiosity-zoom">Zoom</label><input id="curiosity-zoom" type="range" min="1" max="3" step="0.1" value="1">
+              <a id="curiosity-photo-source" href="https://science.nasa.gov/mission/msl-curiosity/" target="_blank" rel="noopener noreferrer">Abrir original NASA ↗</a>
+              <button id="curiosity-photo-close" type="button">✕ Cerrar vista</button>
+            </div>
+          </div>
+          <div id="curiosity-photo-window" aria-label="Desliza para girar horizontalmente el panorama">
+            <img id="curiosity-photo-image" alt="Panorama 360° horizontal de la misión Curiosity, NASA" draggable="false">
+            <div id="curiosity-photo-error" hidden role="status"></div>
+          </div>
+          <p id="curiosity-photo-caption" class="curiosity-photo-note">Mosaico panorámico NASA. Arrastra de lado a lado para explorar la imagen.</p>
+        </section>
       </div>
     </section>
 
@@ -3598,5 +3677,6 @@
       tryConnectBackendOrPrecomputed(true);
     });
   </script>
+  <script src="./curiosity_explorer.js"></script>
 </body>
 </html>
