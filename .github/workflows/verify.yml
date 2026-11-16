@@ -63,6 +63,9 @@ jobs:
       - name: Optional registered NASA/USGS CTX orbital photography
         continue-on-error: true
         run: python scripts/prepare_ortho.py --download --dem jezero_dem_precomputed.json
+      - name: Include official NASA Z-2 astronaut
+        continue-on-error: true
+        run: python scripts/prepare_astronaut.py
       - name: Bundle preview with local Three.js
         run: |
           python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site
