@@ -18,6 +18,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_configured: \${{ steps.pages_config.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,12 +28,20 @@ jobs:
           cache: pip
       - name: Install pinned scientific dependencies
         run: pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned 3D viewer (bundled, no browser CDN)
+        run: npm install --no-audit --no-fund
       - name: Download, validate and resample authentic USGS CTX Jezero heights
         run: |
           python scripts/prepare_dem.py --download ctx --export-json \
             --bbox 77.1605 18.211 77.699 18.7212 --size 440 \
             --output jezero_dem_precomputed.json
           python scripts/verify_static_dem.py jezero_dem_precomputed.json
+      - name: Optionally generate real registered CTX orthophoto
+        continue-on-error: true
+        run: python scripts/prepare_ortho.py --download --dem jezero_dem_precomputed.json
       - name: Build minimal public website (no secrets or raw GeoTIFF)
         run: python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site
       # Always provide a portable science demo, even before Pages is enabled.
@@ -42,13 +52,17 @@ jobs:
           path: _site
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/configure-pages@v5
+      # Pages may not be enabled in the repository; keep a successful downloadable artifact.
+      - id: pages_config
+        uses: actions/configure-pages@v5
+        continue-on-error: true
       - uses: actions/upload-pages-artifact@v4
+        if: steps.pages_config.outcome == 'success'
         with:
           path: _site
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.pages_configured == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment:
