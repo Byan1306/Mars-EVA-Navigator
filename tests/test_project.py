@@ -86,6 +86,17 @@ class WebTests(unittest.TestCase):
         self.assertIn(target, index)
         self.assertTrue((root / target).is_file())
 
+    def test_curiosity_assets_available_without_exposing_private_files(self):
+        with TestClient(app) as client:
+            javascript = client.get('/curiosity_explorer.js')
+            stylesheet = client.get('/curiosity_explorer.css')
+            self.assertEqual(javascript.status_code, 200)
+            self.assertIn('javascript', javascript.headers.get('content-type',''))
+            self.assertIn('CuriosityData', javascript.text)
+            self.assertEqual(stylesheet.status_code, 200)
+            self.assertIn('text/css', stylesheet.headers.get('content-type',''))
+            self.assertIn('#curiosity-explorer', stylesheet.text)
+            self.assertEqual(client.get('/catalog.sqlite').status_code, 404)
     def test_real_elevation_export_support(self):
         root = Path(__file__).resolve().parents[1]
         code = (root / "scripts/prepare_dem.py").read_text(encoding="utf-8")
