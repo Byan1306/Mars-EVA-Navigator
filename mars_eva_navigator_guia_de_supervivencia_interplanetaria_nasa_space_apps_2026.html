@@ -1245,6 +1245,7 @@
           </div>
           <div id="curiosity-photo-window" aria-label="Desliza para girar horizontalmente el panorama">
             <img id="curiosity-photo-image" alt="Panorama 360° horizontal de la misión Curiosity, NASA" draggable="false">
+            <canvas id="curiosity-photo-canvas" hidden aria-label="Vista inmersiva horizontal de un panorama NASA; usa el ratón para girar"></canvas>
             <div id="curiosity-photo-error" hidden role="status"></div>
           </div>
           <p id="curiosity-photo-caption" class="curiosity-photo-note">Mosaico panorámico NASA. Arrastra de lado a lado para explorar la imagen.</p>
@@ -3727,6 +3728,7 @@
       tryConnectBackendOrPrecomputed(true);
     });
   </script>
+  <script src="./curiosity_360_renderer.js"></script>
   <script src="./curiosity_explorer.js"></script>
 </body>
 </html>
