@@ -98,13 +98,115 @@ async def evitar_cache_obsoleto(request, call_next):
 
 @app.get('/', include_in_schema=False)
 def pagina():
-    path = BASE_DIR / HTML_NAME
+    path = BASE_DIR / 'open_world.html'
+    if not path.is_file():
+        path = BASE_DIR / HTML_NAME
     if not path.is_file():
         path = BASE_DIR / 'index.html'
     if not path.is_file():
         raise HTTPException(404, f'Coloca {HTML_NAME} o index.html junto al servidor.')
     return FileResponse(path, media_type='text/html')
 
+
+
+# Only explicitly reviewed public 3D assets are served; no directory traversal.
+@app.get('/open_world.html', include_in_schema=False)
+def open_world_page():
+    return FileResponse(BASE_DIR / 'open_world.html', media_type='text/html')
+
+@app.get('/open_world.css', include_in_schema=False)
+def open_world_styles():
+    return FileResponse(BASE_DIR / 'open_world.css', media_type='text/css')
+
+@app.get('/open_world.mjs', include_in_schema=False)
+def open_world_code():
+    return FileResponse(BASE_DIR / 'open_world.mjs', media_type='text/javascript')
+
+@app.get('/open_world_core.js', include_in_schema=False)
+def open_world_core():
+    return FileResponse(BASE_DIR / 'open_world_core.js', media_type='text/javascript')
+
+@app.get('/vendor/three.module.js', include_in_schema=False)
+def world_three_vendor():
+    path = BASE_DIR / 'node_modules' / 'three' / 'build' / 'three.module.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para instalar Three.js.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/vendor/three.core.js', include_in_schema=False)
+def world_three_core_vendor():
+    path = BASE_DIR / 'node_modules' / 'three' / 'build' / 'three.core.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para instalar Three.js.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/open_world_visuals.mjs', include_in_schema=False)
+def world_cinematic_code():
+    return FileResponse(BASE_DIR / 'open_world_visuals.mjs', media_type='text/javascript')
+
+@app.get('/vendor/loaders/GLTFLoader.js', include_in_schema=False)
+def world_gltf_loader():
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'loaders' / 'GLTFLoader.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para añadir el cargador glTF.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/vendor/utils/BufferGeometryUtils.js', include_in_schema=False)
+def world_gltf_utilities():
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'utils' / 'BufferGeometryUtils.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para añadir las utilidades glTF.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/vendor/loaders/DRACOLoader.js', include_in_schema=False)
+def world_draco_loader():
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'loaders' / 'DRACOLoader.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Instala Three.js para cargar el astronauta.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/vendor/draco/{filename}', include_in_schema=False)
+def world_draco_decoder(filename: str):
+    approved = {'draco_decoder.wasm', 'draco_wasm_wrapper.js', 'draco_decoder.js'}
+    if filename not in approved:
+        raise HTTPException(404, 'El recurso no está autorizado.')
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'libs' / 'draco' / filename
+    if not path.is_file():
+        raise HTTPException(404, 'Falta el decodificador local Draco.')
+    mime = 'application/wasm' if filename.endswith('.wasm') else 'text/javascript'
+    return FileResponse(path, media_type=mime)
+
+@app.get('/assets/astronaut_z2.glb', include_in_schema=False)
+def astronaut_z2_asset():
+    path = BASE_DIR / 'assets' / 'astronaut_z2.glb'
+    if not path.is_file():
+        raise HTTPException(404, 'Modelo NASA Z-2 opcional no descargado.')
+    return FileResponse(path, media_type='model/gltf-binary')
+
+@app.get('/assets/astronaut_manifest.json', include_in_schema=False)
+def astronaut_z2_provenance():
+    path = BASE_DIR / 'assets' / 'astronaut_manifest.json'
+    if not path.is_file():
+        raise HTTPException(404, 'Manifiesto NASA Z-2 no descargado.')
+    return FileResponse(path, media_type='application/json')
+
+@app.get('/jezero_ortho_meta.json', include_in_schema=False)
+def ortho_metadata():
+    path = BASE_DIR / 'jezero_ortho_meta.json'
+    if not path.is_file():
+        raise HTTPException(404, 'La ortofoto opcional todavía no existe.')
+    return FileResponse(path, media_type='application/json')
+
+@app.get('/jezero_ortho.jpg', include_in_schema=False)
+def ortho_image():
+    path = BASE_DIR / 'jezero_ortho.jpg'
+    if not path.is_file():
+        raise HTTPException(404, 'La ortofoto opcional todavía no existe.')
+    return FileResponse(path, media_type='image/jpeg')
+
+@app.get('/' + HTML_NAME, include_in_schema=False)
+def original_eva_planner():
+    return FileResponse(BASE_DIR / HTML_NAME, media_type='text/html')
 
 # Serve only explicit, public app assets. Do not expose the local DEM, database,
 # credentials or private files with a generic static-directory mount.

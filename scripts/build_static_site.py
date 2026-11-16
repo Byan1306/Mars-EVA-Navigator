@@ -21,6 +21,11 @@ PUBLIC_FILES = (
     "curiosity_explorer.css",
     "curiosity_pro.css",
     "curiosity_360_renderer.js",
+    "open_world.html",
+    "open_world.css",
+    "open_world.mjs",
+    "open_world_visuals.mjs",
+    "open_world_core.js",
 )
 
 
@@ -36,6 +41,45 @@ def build(output: Path, dem: Path) -> None:
         if not path.is_file():
             raise FileNotFoundError(f"Missing public asset: {name}")
         shutil.copy2(path, output / name)
+    # Bundle Three.js locally: no CDN is needed at runtime.
+    three = ROOT / "node_modules" / "three" / "build" / "three.module.js"
+    if not three.is_file():
+        raise FileNotFoundError("Three.js is missing. Run npm install before building.")
+    (output / "vendor").mkdir(exist_ok=True)
+    shutil.copy2(three, output / "vendor" / "three.module.js")
+    three_core = ROOT / "node_modules" / "three" / "build" / "three.core.js"
+    if not three_core.is_file():
+        raise FileNotFoundError("Three.js core module missing. Run npm install.")
+    shutil.copy2(three_core, output / "vendor" / "three.core.js")
+    extras = ROOT / "node_modules" / "three" / "examples" / "jsm"
+    for relative in ("loaders/GLTFLoader.js", "loaders/DRACOLoader.js", "utils/BufferGeometryUtils.js"):
+        source_mod = extras / relative
+        if not source_mod.is_file():
+            raise FileNotFoundError(f"Three.js addon not installed: {relative}")
+        out_file = output / "vendor" / relative
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_mod, out_file)
+    # Official NASA Z-2 glTF uses KHR_draco_mesh_compression.
+    # Ship the WASM decoder locally so the web demo works fully offline.
+    decoder_dir = output / "vendor" / "draco"
+    decoder_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("draco_wasm_wrapper.js", "draco_decoder.wasm", "draco_decoder.js"):
+        decoder_file = extras / "libs" / "draco" / name
+        if not decoder_file.is_file():
+            raise FileNotFoundError(f"Local Draco decoder missing: {name}")
+        shutil.copy2(decoder_file, decoder_dir / name)
+    astronaut = ROOT / "assets" / "astronaut_z2.glb"
+    astronaut_meta = ROOT / "assets" / "astronaut_manifest.json"
+    if astronaut.is_file() and astronaut_meta.is_file():
+        (output / "assets").mkdir(exist_ok=True)
+        shutil.copy2(astronaut, output / "assets" / astronaut.name)
+        shutil.copy2(astronaut_meta, output / "assets" / astronaut_meta.name)
+    # Optional USGS-registered CTX texture; never ship unverified arbitrary imagery.
+    texture = ROOT / "jezero_ortho.jpg"
+    texture_meta = ROOT / "jezero_ortho_meta.json"
+    if texture.exists() and texture_meta.exists():
+        shutil.copy2(texture, output / texture.name)
+        shutil.copy2(texture_meta, output / texture_meta.name)
     shutil.copy2(source, output / "jezero_dem_precomputed.json")
     print(f"Static NASA science build ready: {output} ({metadata['valid_fraction']:.1%} valid cells)")
 

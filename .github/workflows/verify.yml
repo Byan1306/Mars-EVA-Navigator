@@ -21,12 +21,69 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install pinned 3D runtime locally (not from CDN)
+        run: npm install --no-audit --no-fund
       - name: Validate Curiosity JavaScript
         run: |
           node --check curiosity_explorer.js
           node --check curiosity_360_renderer.js
+          node --check open_world.mjs
+          node --check open_world_visuals.mjs
+          node --check open_world_core.js
+          node --test tests/open-world-core.test.cjs
           node --test tests/curiosity.test.cjs tests/curiosity-mission-control.test.cjs
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
       - name: Check Python compilation
         run: python -m compileall -q mars_dem_server.py catalog_store.py scripts tests
+
+  science-preview:
+    if: github.event_name == 'pull_request'
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install scientific processing dependencies
+        run: pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locally bundled Three.js and browser driver
+        run: npm install --no-audit --no-fund
+      - name: Produce authentic USGS Jezero DEM artifact
+        run: |
+          python scripts/prepare_dem.py --download ctx --export-json \
+            --bbox 77.1605 18.211 77.699 18.7212 --size 440 \
+            --output jezero_dem_precomputed.json
+          python scripts/verify_static_dem.py jezero_dem_precomputed.json
+      - name: Optional registered NASA/USGS CTX orbital photography
+        continue-on-error: true
+        run: python scripts/prepare_ortho.py --download --dem jezero_dem_precomputed.json
+      - name: Include official NASA Z-2 astronaut
+        continue-on-error: true
+        run: python scripts/prepare_astronaut.py
+      - name: Bundle preview with local Three.js
+        run: |
+          python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site
+      - name: Real Chrome WebGL smoke test
+        continue-on-error: true
+        run: node tests/smoke_world.cjs
+      - name: Publish downloadable full 3D web preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: mars-jezero-3d-science-preview
+          path: _site/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish browser screenshot and smoke-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mars-jezero-webgl-browser-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 7

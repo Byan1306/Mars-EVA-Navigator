@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10141b">
+  <meta name="description" content="Exploración 3D de Jezero derivada de un modelo digital de elevación auténtico de USGS/NASA.">
+  <title>Mars EVA Navigator — Open World 3D</title>
+  <link rel="stylesheet" href="./open_world.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="./index.html" aria-label="Mars EVA Navigator, inicio">
+        <span class="brand-mark">◈</span><span><b>MARS EVA</b><small>NAVIGATOR / OPEN WORLD</small></span>
+      </a>
+      <span class="separator" aria-hidden="true"></span>
+      <span class="mission">● PERSEVERANCE <span class="mission-muted">/ JEZERO CRATER</span></span>
+      <div class="top-actions">
+        <a class="secondary-link" href="./mars_eva_navigator_guia_de_supervivencia_interplanetaria_nasa_space_apps_2026.html">Planificador EVA ↗</a>
+        <button type="button" id="infoToggle" class="top-button" aria-expanded="true" aria-controls="sciencePanel">Datos <span>⌄</span></button>
+      </div>
+    </header>
+    <main class="viewport">
+      <canvas id="world" aria-label="Terreno 3D de Jezero, Marte"></canvas>
+      <div class="sky-label">MARS / SURFACE EXPLORATION</div>
+      <div id="loadOverlay" class="load-overlay">
+        <div class="load-inner">
+          <span class="eyebrow">MISSION EVIDENCE / JEZERO</span>
+          <h1>Camina sobre<br><em>un Marte medido.</em></h1>
+          <p id="loadMessage" role="status">Cargando elevaciones georreferenciadas y geometría tridimensional…</p>
+          <div class="loading-rail"><span></span></div>
+          <button id="retry" class="retry hidden">Reintentar carga</button>
+          <a class="back-link" href="./mars_eva_navigator_guia_de_supervivencia_interplanetaria_nasa_space_apps_2026.html">Volver al planificador 2D</a>
+        </div>
+      </div>
+      <div class="hud-top">
+        <span class="hud-pill"><span class="signal"></span><span id="dataState">COMPROBANDO DEM</span></span>
+        <span class="hud-pill" id="viewMode">PRIMERA PERSONA</span><span class="hud-pill visual-disclaimer">ESCENA ILUSTRATIVA</span>
+      </div>
+      <div id="crosshair" aria-hidden="true"><span></span></div>
+      <aside class="science-panel" id="sciencePanel" aria-label="Información científica">
+        <div class="panel-heading"><span class="eyebrow">TELEMETRÍA / SIMULACIÓN</span><span class="tiny-dot"></span></div>
+        <h2>Superficie de Jezero</h2>
+        <p class="panel-hint">Datos de elevación observados, navegación virtual experimental.</p>
+        <div class="stats">
+          <div><span>LONGITUD E</span><strong id="lon">—</strong></div>
+          <div><span>LATITUD N</span><strong id="lat">—</strong></div>
+          <div><span>ELEVACIÓN DEL DEM</span><strong id="elev">—</strong></div>
+          <div><span>PENDIENTE DEL DEM</span><strong id="slope">—</strong></div>
+          <div><span>ESCALA DE CELDA</span><strong id="cell">—</strong></div>
+          <div><span>COBERTURA VÁLIDA</span><strong id="coverage">—</strong></div>
+        </div>
+        <div class="panel-section">
+          <span class="eyebrow">OBSERVACIÓN Y MODELO</span>
+          <p id="evidence">Esperando datos. Ningún terreno sintético sustituirá las mediciones.</p>
+          <a id="sourceLink" href="https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-ctx-dtm-mosaic" target="_blank" rel="noopener noreferrer">Consultar fuente USGS ↗</a>
+        </div>
+        <div class="panel-section">
+          <span class="eyebrow">MODO DE DESPLAZAMIENTO</span>
+          <label class="switch-line"><span>Restringir pendiente a 25°</span><input id="safeMode" type="checkbox" checked></label>
+          <label class="select-line">Calidad gráfica
+            <select id="quality"><option value="low">Baja</option><option value="balanced" selected>Equilibrada</option><option value="high">Alta</option></select>
+          </label>
+          <label class="switch-line"><span>Ambientación cinematográfica (simulada)</span><input id="visualDetail" type="checkbox" checked></label>
+          <p id="visualEvidence" class="visual-evidence">Astronauta 3D: modelo conceptual; rocas y atmósfera recreadas para visualización, no medidas por rover.</p>
+          <a href="https://science.nasa.gov/3d-resources/z2-spacesuit/" target="_blank" rel="noopener noreferrer">Fuente del traje Z-2 (NASA) ↗</a>
+        </div>
+        <p class="scientific-note">Prototipo educativo. No identifica obstáculos subcelda ni certifica rutas seguras para astronautas.</p>
+      </aside>
+      <aside class="map-panel" aria-label="Minimapa de elevaciones">
+        <div class="map-heading"><span>MAPA ALTIMÉTRICO</span><span>CTX / JEZERO</span></div>
+        <canvas id="minimap" width="208" height="180" title="Pulsa para desplazarte a un punto con DEM válido"></canvas>
+        <div class="map-foot">Pulsa el mapa para viajar · sombreado derivado del DEM</div>
+      </aside>
+      <div class="bottom-bar">
+        <div class="mode-group" aria-label="Controles de cámara">
+          <button id="cameraFirst" class="mode active">01 <span>Caminar</span></button>
+          <button id="cameraThird" class="mode">02 <span>Tercera persona</span></button>
+          <button id="cameraFly" class="mode">03 <span>Volar</span></button>
+          <button id="cameraOrbit" class="mode">04 <span>Orbital</span></button>
+          <button id="cameraTop" class="mode">05 <span>Cenital</span></button>
+        </div>
+        <div class="hints"><b>W A S D</b> mover <b>RATÓN</b> mirar <b>SHIFT</b> acelerar <b>F</b> volar <b>V</b> cámara <b>R</b> restaurar <b>ESC</b> liberar</div>
+      </div>
+      <div class="toast hidden" id="toast" role="status"></div>
+      <button class="enter-button" id="enterWorld" type="button">Entrar en la exploración · click para capturar el ratón</button>
+    </main>
+  </div>
+  <script type="module" src="./open_world.mjs"></script>
+</body>
+</html>

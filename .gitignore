@@ -26,3 +26,12 @@ _site/
 jezero_dem_precomputed.json
 *.tif.provenance.json
 *.tiff.provenance.json
+
+# Local NPM dependency and derived imagery (generated at release)
+node_modules/
+jezero_ortho.jpg
+jezero_ortho_meta.json
+
+# Official NASA 3D asset downloaded on CI
+assets/astronaut_z2.glb
+assets/astronaut_manifest.json
