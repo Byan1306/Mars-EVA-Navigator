@@ -40,6 +40,15 @@ jobs:
           python surface_hirise/prepare_surface.py --tiles 1 --no-ortho \
             --output _hires_surface/Mars_Jezero_Real_Surface
           python surface_hirise/validate_output.py _hires_surface/Mars_Jezero_Real_Surface
+      - name: Package first verified 256m sector immediately
+        run: python surface_hirise/build_bundle.py _hires_surface/Mars_Jezero_Real_Surface
+      - name: Preserve immediate authentic 256m download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_Jezero_HiRISE_Real_256m_early
+          path: _hires_surface/Mars_Jezero_Real_Surface/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upgrade to 1024m real HiRISE and original registered 25cm imagery
         id: full_surface
         continue-on-error: true
