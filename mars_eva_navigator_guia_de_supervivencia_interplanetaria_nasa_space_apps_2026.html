@@ -1733,6 +1733,8 @@
         validFraction,
         cellSizeM: Number(data.cell_size_m) || 25,
         sourceResolutionM: data.source_resolution_m_approx || null,
+        sourceUrl: (typeof data.source_url === 'string' && /^https:\/\/planetarymaps\.usgs\.gov\/mosaic\/mars2020_trn\//.test(data.source_url)) ? data.source_url : null,
+        sourceSHA256: (typeof data.source_sha256 === 'string' && /^[a-f0-9]{64}$/.test(data.source_sha256)) ? data.source_sha256 : null,
         downsampling: Number(data.downsampling_factor_approx) || null
       };
 
@@ -3246,6 +3248,16 @@
         prototype: true,
         section: APP.section,
         dem_source: document.getElementById('dem-source-banner').textContent,
+        dem_provenance: APP.tifDem ? {
+          source_file: APP.tifDem.sourceName,
+          official_source_url: APP.tifDem.sourceUrl,
+          original_geotiff_sha256: APP.tifDem.sourceSHA256,
+          published_source_resolution_m: APP.tifDem.sourceResolutionM,
+          sampled_cell_size_m: APP.activeDem?.cellSizeM ?? null,
+          valid_fraction: APP.tifDem.validFraction,
+          source_bbox_lonlat: APP.tifDem.fullBbox,
+          spatial_limitations: 'DEM-derived route, not verified by astronauts or rover. Features below grid size may be missed.'
+        } : null,
         coordinate_reference: APP.isAnalogEarth ? 'Earth sphere R=6371008.8m, lon/lat' : 'Mars sphere R=3396190m, lon/lat',
         name: 'MARS_EVA_NAVIGATOR_ROUTES_IAU_2015_49900',
         features
