@@ -98,13 +98,58 @@ async def evitar_cache_obsoleto(request, call_next):
 
 @app.get('/', include_in_schema=False)
 def pagina():
-    path = BASE_DIR / HTML_NAME
+    path = BASE_DIR / 'open_world.html'
+    if not path.is_file():
+        path = BASE_DIR / HTML_NAME
     if not path.is_file():
         path = BASE_DIR / 'index.html'
     if not path.is_file():
         raise HTTPException(404, f'Coloca {HTML_NAME} o index.html junto al servidor.')
     return FileResponse(path, media_type='text/html')
 
+
+
+# Only explicitly reviewed public 3D assets are served; no directory traversal.
+@app.get('/open_world.html', include_in_schema=False)
+def open_world_page():
+    return FileResponse(BASE_DIR / 'open_world.html', media_type='text/html')
+
+@app.get('/open_world.css', include_in_schema=False)
+def open_world_styles():
+    return FileResponse(BASE_DIR / 'open_world.css', media_type='text/css')
+
+@app.get('/open_world.mjs', include_in_schema=False)
+def open_world_code():
+    return FileResponse(BASE_DIR / 'open_world.mjs', media_type='text/javascript')
+
+@app.get('/open_world_core.js', include_in_schema=False)
+def open_world_core():
+    return FileResponse(BASE_DIR / 'open_world_core.js', media_type='text/javascript')
+
+@app.get('/vendor/three.module.js', include_in_schema=False)
+def world_three_vendor():
+    path = BASE_DIR / 'node_modules' / 'three' / 'build' / 'three.module.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para instalar Three.js.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/jezero_ortho_meta.json', include_in_schema=False)
+def ortho_metadata():
+    path = BASE_DIR / 'jezero_ortho_meta.json'
+    if not path.is_file():
+        raise HTTPException(404, 'La ortofoto opcional todavía no existe.')
+    return FileResponse(path, media_type='application/json')
+
+@app.get('/jezero_ortho.jpg', include_in_schema=False)
+def ortho_image():
+    path = BASE_DIR / 'jezero_ortho.jpg'
+    if not path.is_file():
+        raise HTTPException(404, 'La ortofoto opcional todavía no existe.')
+    return FileResponse(path, media_type='image/jpeg')
+
+@app.get('/' + HTML_NAME, include_in_schema=False)
+def original_eva_planner():
+    return FileResponse(BASE_DIR / HTML_NAME, media_type='text/html')
 
 # Serve only explicit, public app assets. Do not expose the local DEM, database,
 # credentials or private files with a generic static-directory mount.
