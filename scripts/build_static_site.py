@@ -8,7 +8,10 @@ import argparse
 from pathlib import Path
 import shutil
 
-from verify_static_dem import verify
+try:
+    from .verify_static_dem import verify
+except ImportError:  # direct invocation: python scripts/build_static_site.py
+    from verify_static_dem import verify
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_FILES = (
