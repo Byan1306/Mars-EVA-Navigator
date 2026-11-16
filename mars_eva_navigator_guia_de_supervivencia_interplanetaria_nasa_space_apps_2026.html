@@ -1468,6 +1468,19 @@
     let thematicLayerGroup = null;
     let roverSitesLayerGroup = null;
     let tifFootprintRect = null;
+    let jezeroReliefOverlay=null,photographicBasemap=null;
+    let basemapChoices=[];
+    function pointCoveredByDem(point){
+      const b=APP.tifDem?.fullBbox;
+      return Array.isArray(b)&&point.every(Number.isFinite)&&
+        point[1]>=b[0]&&point[1]<=b[2]&&point[0]>=b[1]&&point[0]<=b[3];
+    }
+    function showPhotoBasemap(){
+      if(!map||!photographicBasemap||map.hasLayer(photographicBasemap))return;
+      for(const other of basemapChoices)if(map.hasLayer(other))map.removeLayer(other);
+      photographicBasemap.addTo(map);
+    }
+
 
     function initMap() {
       map = L.map('mars-map', {
@@ -1479,42 +1492,41 @@
         worldCopyJump: false
       });
 
-      const vikingColorLayer = L.tileLayer(
-        'https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/{z}/{y}/{x}.jpg',
-        {
-          attribution: 'NASA / JPL / USGS Mars Trek (Viking MDIM 2.1 • Marte esférico R=3396190 m)',
-          tileSize: 256,
-          zoomOffset: 0,
-          minZoom: 0,
-          maxNativeZoom: 7,
-          maxZoom: 18,
-          noWrap: true,
-          bounds: [[-90, -180], [90, 180]]
-        }
-      ).addTo(map);
-
-      const molaReliefLayer = L.tileLayer(
-        'https://trek.nasa.gov/tiles/Mars/EQ/Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw/1.0.0/default/default028mm/{z}/{y}/{x}.jpg',
-        {
-          attribution: 'NASA / MOLA + HRSC Color Shaded Relief',
-          tileSize: 256,
-          zoomOffset: 0,
-          minZoom: 0,
-          maxNativeZoom: 6,
-          maxZoom: 18,
-          noWrap: true,
-          bounds: [[-90, -180], [90, 180]]
-        }
-      );
-
-      L.control.layers(
-        {
-          'Óptica Marte Real (Viking MDIM 2.1)': vikingColorLayer,
-          'Topografía Global (MOLA + HRSC)': molaReliefLayer
-        },
-        null,
-        { position: 'topright' }
-      ).addTo(map);
+      // Jezero orbital photographs with NASA HiRISE/CTX mosaic footprints.
+      // The shaded DEM (below the optical tiles) is an honest local fallback.
+      for(const [name,z] of [['jezeroReliefPane',210],['jezeroCtxPane',220],['jezeroHiRISEPane',230]]){
+        map.createPane(name);map.getPane(name).style.zIndex=String(z);
+      }
+      const prefix='https://trek.nasa.gov/tiles/Mars/EQ/';
+      const suffix='/1.0.0/default/default028mm/{z}/{y}/{x}';
+      const makeViking=()=>L.tileLayer(prefix+'Mars_Viking_MDIM21_ClrMosaic_global_232m'+suffix+'.jpg',{
+        attribution:'NASA/JPL/USGS · Viking 232 m/píxel',tileSize:256,minZoom:0,
+        maxNativeZoom:7,maxZoom:18,noWrap:true,bounds:[[-90,-180],[90,180]]
+      });
+      const makeCTX=()=>L.tileLayer(prefix+'JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0'+suffix+'.png',{
+        attribution:'NASA/JPL/USGS · Jezero CTX ortomosaico 6 m/píxel',
+        tileSize:256,minZoom:7,maxNativeZoom:13,maxZoom:18,noWrap:true,
+        bounds:[[18.2110274,77.1604655],[18.7211945,77.6991776]],pane:'jezeroCtxPane'
+      });
+      const makeHiRISE=()=>L.tileLayer(prefix+'JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd'+suffix+'.png',{
+        attribution:'NASA/JPL/University of Arizona · Jezero HiRISE 25 cm/píxel',
+        tileSize:256,minZoom:8,maxNativeZoom:16,maxZoom:18,noWrap:true,
+        bounds:[[18.3067994,77.2229331],[18.669315,77.583964]],pane:'jezeroHiRISEPane'
+      });
+      photographicBasemap=L.layerGroup([makeViking(),makeCTX(),makeHiRISE()]).addTo(map);
+      const ctxBasemap=L.layerGroup([makeViking(),makeCTX()]);
+      const vikingBasemap=L.layerGroup([makeViking()]);
+      const molaReliefLayer=L.tileLayer(prefix+'Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw'+suffix+'.jpg',{
+        attribution:'NASA · MOLA/HRSC, relieve coloreado (no fotografía)',tileSize:256,
+        minZoom:0,maxNativeZoom:6,maxZoom:18,noWrap:true,bounds:[[-90,-180],[90,180]]
+      });
+      basemapChoices=[photographicBasemap,ctxBasemap,vikingBasemap,molaReliefLayer];
+      L.control.layers({
+        'Jezero · NASA HiRISE + CTX (fotografía)':photographicBasemap,
+        'Jezero · NASA CTX 6 m (fotografía)':ctxBasemap,
+        'Viking · vista global 232 m':vikingBasemap,
+        'MOLA · relieve coloreado (no fotografía)':molaReliefLayer
+      },null,{position:'topright',collapsed:true}).addTo(map);
 
       thematicLayerGroup = L.layerGroup().addTo(map);
       routesLayerGroup = L.layerGroup().addTo(map);
