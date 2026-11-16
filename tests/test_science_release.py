@@ -65,6 +65,7 @@ class ReleaseTests(unittest.TestCase):
             set(PUBLIC_FILES) | {"jezero_dem_precomputed.json", "vendor"}
         )
         self.assertTrue((target / "vendor" / "three.module.js").is_file())
+        self.assertTrue((target / "vendor" / "three.core.js").is_file())
         self.assertFalse((target / "catalog.sqlite").exists())
         self.assertFalse((target / "mars_dem_server.py").exists())
 
