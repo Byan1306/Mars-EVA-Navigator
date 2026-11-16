@@ -70,3 +70,15 @@ test('GPU panorama engine is present but remains separate from 3D terrain recons
   assert.match(js,/verticalFov/);
   assert.match(js,/formato panorámico cilíndrico/);
 });
+
+test('Immersive navigation only steps between documented NASA panorama stations',()=>{
+  const js=fs.readFileSync(path.join(root,'curiosity_explorer.js'),'utf8');
+  const css=fs.readFileSync(path.join(root,'curiosity_pro.css'),'utf8');
+  assert.match(js,/const NAVIGABLE_PANORAMAS = PANORAMAS\.filter/);
+  assert.match(js,/function stepDocumentedPanorama/);
+  assert.match(js,/ESTACIÓN NASA/);
+  assert.match(js,/sin desplazamiento fotográfico continuo/);
+  assert.match(js,/requestFullscreen/);
+  assert.match(css,/\.curiosity-station-nav/);
+  assert.match(js,/e\.key==='ArrowLeft'/);
+});
