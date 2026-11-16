@@ -155,9 +155,12 @@ def terrain(output:Path,src_path:Path,texture:Path|None):
      tile={"id":name,"row":r,"col":c,"texture":None,
        "valid_fraction":float(good[r*TILE:r*TILE+TILE+1,c*TILE:c*TILE+TILE+1].mean())}
      if texture:
-      area=Window(c*TILE,r*TILE,TILE+1,TILE+1)
-      bounds=rasterio.windows.bounds(area,target_transform)
-      tform=from_bounds(*bounds,TEXTURE_SIZE,TEXTURE_SIZE)
+      # Align the photo to the exact terrain-vertex centers at tile edges.
+      left=target_transform.c+(c*TILE+.5)*target_transform.a
+      right=left+TILE*target_transform.a
+      top=target_transform.f+(r*TILE+.5)*target_transform.e
+      bottom=top+TILE*target_transform.e
+      tform=from_bounds(left,bottom,right,top,TEXTURE_SIZE,TEXTURE_SIZE)
       pixels=np.zeros((TEXTURE_SIZE,TEXTURE_SIZE),np.float32)
       reproject(source=rasterio.band(photo,1),destination=pixels,
         src_transform=photo.transform,src_crs=photo.crs,src_nodata=photo.nodata,
