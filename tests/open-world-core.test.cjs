@@ -43,8 +43,8 @@ test('NoData blocks interpolation and LOD patches never bridge missing pixels',(
   const forbidden=[quadStart,quadStart+1,quadOther,quadOther+1];
   // The coarse 8..16 square (missing pixel 14,15) must contain no triangle.
   for(let i=0;i<coarse.indices.length;i+=3)
-    assert.ok(!forbidden.every(v=>[coarse.indices[i],coarse.indices[i+1],
-      coarse.indices[i+2]].includes(v)));
+    assert.ok(![coarse.indices[i],coarse.indices[i+1],
+      coarse.indices[i+2]].every(v=>forbidden.includes(v)));
   assert.ok(coarse.indices.length<4*4*6);
 });
 test('Movement outside raster is rejected rather than extrapolated',()=>{
