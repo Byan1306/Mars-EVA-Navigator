@@ -119,6 +119,13 @@ emergency-return models and local DEM backend remain intact.
 - **Safety:** invalid/missing DEM is reported, never replaced silently with
   fabricated elevations for Jezero mission.
 
+**Portable fallback if GitHub Pages has not been enabled:** open the most recent
+**Publish Mars EVA Navigator with verified Jezero DEM** workflow in Actions,
+download the `mars-eva-verified-web-demo` artifact from its Artifacts section
+and extract the ZIP. From the extracted directory run `python -m http.server
+8080`, then open `http://127.0.0.1:8080/`. The package contains the authentic
+validated DEM JSON; map tiles and NASA imagery still require Internet access.
+
 **One-time site setup:** repository **Settings → Pages → Source → GitHub Actions**.
 The workflow `Publish Mars EVA Navigator with verified Jezero DEM` downloads
 and validates data before publishing. Do not claim the Pages release has real
