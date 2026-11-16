@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jezero / HiRISE — Superficie 3D real</title>
+<style>
+:root{font:14px system-ui,sans-serif;color:#f7eae0;background:#160f0f}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden}
+#planet{position:fixed;inset:0;width:100%;height:100%;display:block}
+nav{position:fixed;left:20px;top:20px;max-width:320px;background:#1e1d22db;padding:21px;
+border:1px solid #f1d2af33;border-radius:13px;backdrop-filter:blur(18px)}
+h1{font-size:21px;letter-spacing:-.05em;margin:10px 0}
+nav p{line-height:1.6;font-size:12px;color:#cbbdb4}
+small,.muted{color:#bdac9e}.source{font-size:10px;color:#eca67e;letter-spacing:.14em}
+aside{position:fixed;right:20px;top:20px;max-width:270px;background:#191a20df;
+padding:14px 16px;border-radius:12px;border:1px solid #cfa78740}
+button{background:#45352f;color:#f8eee6;border:1px solid #bc947951;border-radius:7px;
+padding:10px;cursor:pointer;margin:3px;font:inherit}
+button:hover{background:#725041}
+button.active{background:#9f6040;border-color:#e9af84}
+#status{max-width:260px;word-wrap:break-word;line-height:1.5;color:#f0b08d}
+footer{position:fixed;bottom:15px;left:50%;transform:translateX(-50%);width:max-content;
+max-width:96vw;padding:11px 15px;border:1px solid #b69a7a53;border-radius:10px;
+background:#1a1c25e8;text-align:center}
+footer small{display:block;margin:7px auto;line-height:1.4}
+#metrics{font-variant-numeric:tabular-nums}
+@media(max-width:650px){nav{max-width:250px;left:9px;top:9px;padding:12px}
+nav h1{font-size:16px}aside{right:9px;top:auto;bottom:90px;max-width:200px}}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head><body>
+<canvas id="planet" aria-label="Superficie observada de Jezero en 3D"></canvas>
+<nav><span class="source">USGS / NASA · HIRISE</span><h1>Jezero · 1 metro</h1>
+<p>La malla está construida exclusivamente con alturas medidas por HiRISE.
+La fotografía orbital original se aplica sobre el relieve georreferenciado.</p>
+<div id="metrics">DEM: <b>verificando…</b></div>
+<p><small>No incluye rocas individuales reconstruidas por los rovers. El cielo,
+los colores cálidos y la iluminación son una representación ilustrativa.</small></p>
+<p><a href="https://astrogeology.usgs.gov/search/map/mars_2020_terrain_relative_navigation_hirise_dtm_mosaic"
+ target="_blank" rel="noopener" style="color:#ecaa82">Fuente científica original ↗</a></p></nav>
+<aside>
+<div class="source">VISTA PREVIA INDEPENDIENTE</div>
+<p id="status" role="status">Cargando tiles de elevación real…</p>
+<div>Calidad geométrica</div>
+<div><button id="lod8">8 m</button><button id="lod4" class="active">4 m</button>
+<button id="lod2">2 m</button><button id="lod1">1 m</button></div>
+<p style="font-size:12px"><label><input id="warm" type="checkbox" checked> Colorización cálida (ilustrativa)</label></p>
+</aside>
+<footer><div><button id="orbit" class="active">Orbital</button>
+<button id="walk">Caminar</button><button id="reset">Centro</button></div>
+<small>RATÓN arrastrar: mirar / orbitar · RUEDA: zoom · WASD: desplazamiento · SHIFT: rápido</small></footer>
+<script type="module">
+import * as THREE from 'three';
+import {createMeasuredJezeroSurface} from './terrain_loader.mjs';
+const $=id=>document.getElementById(id);
+const renderer=new THREE.WebGLRenderer({canvas:$('planet'),antialias:true});
+renderer.setPixelRatio(Math.min(1.8,window.devicePixelRatio||1));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.3;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x78534b);
+scene.fog=new THREE.Fog(0x90665a,950,2800);
+const camera=new THREE.PerspectiveCamera(64,1,.1,8000);
+scene.add(new THREE.HemisphereLight(0xffe2ca,0x55312b,2));
+const sun=new THREE.DirectionalLight(0xffd1a0,3.0);
+sun.position.set(-200,530,-500);scene.add(sun);
+let surface=null;
+let mode='orbit',yaw=0.3,pitch=0.52,radius=360,focus={x:0,z:0},
+ position={x:0,y:2,z:0},drag=false;
+const keys=new Set();
+const status=s=>{$('status').textContent=s};
+function size(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+window.addEventListener('resize',size);size();
+function moveCamera(dt) {
+ if(!surface)return;
+ const speed=(keys.has('shift')?52:15)*dt;
+ if(mode==='walk') {
+  const fw=(keys.has('w')?1:0)-(keys.has('s')?1:0);
+  const side=(keys.has('d')?1:0)-(keys.has('a')?1:0);
+  let x=position.x+(Math.sin(yaw)*fw+Math.cos(yaw)*side)*speed;
+  let z=position.z+(-Math.cos(yaw)*fw+Math.sin(yaw)*side)*speed;
+  const h=surface.sampleHeight(x,z);
+  if(h!==null){position.x=x;position.z=z;position.y=h+1.7}
+  camera.position.set(position.x,position.y,position.z);
+  camera.lookAt(position.x+Math.sin(yaw)*Math.cos(pitch),
+    position.y+Math.sin(pitch),position.z-Math.cos(yaw)*Math.cos(pitch));
+ } else {
+  let fw=(keys.has('w')?1:0)-(keys.has('s')?1:0);
+  let side=(keys.has('d')?1:0)-(keys.has('a')?1:0);
+  focus.x+=(Math.sin(yaw)*fw+Math.cos(yaw)*side)*speed;
+  focus.z+=(-Math.cos(yaw)*fw+Math.sin(yaw)*side)*speed;
+  const h=surface.sampleHeight(focus.x,focus.z);
+  const y=h===null?0:h;
+  camera.position.set(focus.x+Math.sin(yaw)*radius*Math.cos(pitch),
+    y+radius*Math.sin(pitch),focus.z+Math.cos(yaw)*radius*Math.cos(pitch));
+  camera.lookAt(focus.x,y,focus.z);
+ }
+}
+let last=0;
+function animate(t) {
+ requestAnimationFrame(animate);
+ const dt=Math.min((t-last)*.001,.05);last=t;
+ moveCamera(dt);
+ renderer.render(scene,camera);
+ document.body.dataset.triangles=String(renderer.info.render.triangles);
+ if(surface&&t%300<16){
+  $('metrics').textContent='DEM: '+surface.manifest.source_dem_native_pixel_spacing_projected_m.join(' × ')+
+    ' m originales · '+surface.manifest.tiles.length+' tiles · '+
+    surface.getLOD()+'m LOD · Foto: '+(surface.manifest.photographic_texture.available?'HiRISE 25 cm':'no disponible');
+ }
+}
+requestAnimationFrame(animate);
+window.addEventListener('keydown',e=>{if(!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))keys.add(e.key.toLowerCase())});
+window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',()=>keys.clear());
+const canvas=$('planet');
+canvas.addEventListener('pointerdown',e=>{drag=true;canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointerup',()=>drag=false);
+canvas.addEventListener('pointermove',e=>{
+ if(!drag)return;
+ yaw-=e.movementX*.004;
+ pitch=Math.min(1.50,Math.max(mode==='walk'?-1.45:-.15,pitch+(mode==='walk'?-1:1)*e.movementY*.004));
+});
+canvas.addEventListener('wheel',e=>{if(mode==='orbit'){e.preventDefault();radius=Math.max(5,Math.min(1800,radius*Math.exp(e.deltaY*.0013)))}} ,{passive:false});
+$('orbit').addEventListener('click',()=>{mode='orbit';pitch=.65;$('orbit').classList.add('active');$('walk').classList.remove('active')});
+$('walk').addEventListener('click',()=>{mode='walk';const h=surface?.sampleHeight(focus.x,focus.z);if(h!==null){position.x=focus.x;position.z=focus.z;position.y=h+1.7}pitch=0;$('walk').classList.add('active');$('orbit').classList.remove('active')});
+$('reset').addEventListener('click',()=>{focus={x:0,z:0};position={x:0,y:2,z:0};radius=360;yaw=.3;pitch=.52});
+$('warm').addEventListener('change',e=>surface?.setAppearance({tint:e.target.checked}));
+for(const step of [1,2,4,8])$('lod'+step).addEventListener('click',async()=>{
+ if(!surface)return;
+ status('Cargando LOD '+step+' de datos medidos…');
+ try{await surface.setLOD(step);
+  for(const s of [1,2,4,8])$('lod'+s).classList.toggle('active',s===step);
+  status('LOD '+step+' m activo; sin alteración vertical.');}
+ catch(err){status('No se pudo cambiar LOD: '+err.message)}
+});
+try {
+ surface=await createMeasuredJezeroSurface({
+  scene,initialLOD:4,onProgress:p=>status(p.phase==='ready'?'Superficie auténtica lista':
+     'Mallas verificadas: '+(p.loaded||0)+' / '+(p.total||0))});
+ const h=surface.sampleHeight(0,0);
+ if(h===null)throw Error('El punto central no tiene dato de elevación.');
+ position.y=h+1.7;
+ document.body.dataset.surfaceReady='true';
+ status('HiRISE auténtico cargado. Se puede caminar y cambiar LOD.');
+} catch(err) {
+ console.error('HiRISE surface unavailable:',err);
+ document.body.dataset.surfaceReady='false';
+ status('SIN DATOS HIRISE VÁLIDOS: '+err.message);
+}
+</script></body></html>
