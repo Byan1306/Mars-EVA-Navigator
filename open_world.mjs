@@ -175,7 +175,7 @@ function safeGround(x,z) {
   const h=C.sample(d,x,z);
   if(h===null) return null;
   const slope=C.slope(d,x,z);
-  if($('safeMode').checked && slope!==null && slope>25) return null;
+  if($('safeMode').checked && (slope===null || slope>25)) return null;
   return h;
 }
 let lastBlockNotice=0;
