@@ -43,7 +43,7 @@ const launchOptions={channel:'chrome',headless:true,args:[
    page.on('pageerror',err=>report.consoleErrors.push(String(err)));
    await page.goto('http://127.0.0.1:'+port+'/open_world.html',{waitUntil:'domcontentloaded'});
    await page.waitForFunction(()=>['ready','error'].includes(document.body.dataset.worldState),
-     {timeout:90000});
+     null,{timeout:90000});
    report.worldState=await page.locator('body').getAttribute('data-world-state');
    if(report.worldState!=='ready')
      throw Error('3D viewer initialization failed: '+await page.locator('#loadMessage').textContent());
