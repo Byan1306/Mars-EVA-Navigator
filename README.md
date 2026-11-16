@@ -1,5 +1,24 @@
 # Mars EVA Navigator 🚀
 
+## 🌐 Jezero Open World 3D (experimental)
+
+The new `open_world.html` viewer renders **real triangular Martian terrain
+geometry** from a validated USGS CTX elevation grid. It supports first/third
+person movement, flight, an orbital camera, a scientific minimap, collision,
+NoData masking and distance-based terrain LOD. The original EVA planner is
+still available from the new viewer.
+
+This is a **regional 3D prototype**, not a full rover-local reconstruction.
+The USGS orthomosaic can optionally be prepared as a registered, original
+orbital texture; otherwise analytical altitude shading is clearly labelled.
+Curiosity/Gale terrain and high-resolution rover meshes remain separate,
+unimplemented milestones.
+
+Read **[Open World technical instructions, official dataset provenance and
+limitations](docs/OPEN_WORLD_3D.md)** to download the authentic USGS data,
+install the locally bundled Three.js runtime and run on Windows 11.
+
+
 ### Every Step Matters
 
 **NASA Space Apps Challenge 2026 | Interplanetary Survival Guide: Martian Map**
