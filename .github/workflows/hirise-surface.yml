@@ -1,0 +1,92 @@
+name: Build authentic Jezero HiRISE 1m terrain
+
+on:
+  pull_request:
+    branches: [feature/jezero-open-world-3d]
+    paths:
+      - 'surface_hirise/**'
+      - '.github/workflows/hirise-surface.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scientific-terrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install scientific raster, graphics and data packages
+        run: python -m pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned local Three.js and Playwright dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate source modules and mesh unit tests
+        run: |
+          python -m compileall -q surface_hirise/
+          python surface_hirise/test_geometry.py -v
+          node --check surface_hirise/terrain_loader.mjs
+          node --check surface_hirise/smoke_preview.cjs
+      - name: Verify NASA USGS DEM with small real 256m crop first
+        timeout-minutes: 8
+        run: |
+          python surface_hirise/prepare_surface.py --tiles 1 --no-ortho \
+            --output _hires_surface/Mars_Jezero_Real_Surface
+          python surface_hirise/validate_output.py _hires_surface/Mars_Jezero_Real_Surface
+      - name: Package first verified 256m sector immediately
+        run: python surface_hirise/build_bundle.py _hires_surface/Mars_Jezero_Real_Surface
+      - name: Preserve immediate authentic 256m download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_Jezero_HiRISE_Real_256m_early
+          path: _hires_surface/Mars_Jezero_Real_Surface/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upgrade to 1024m real HiRISE and original registered 25cm imagery
+        id: full_surface
+        continue-on-error: true
+        timeout-minutes: 19
+        run: |
+          python surface_hirise/prepare_surface.py --tiles 4 \
+            --output _hires_surface/full_resolution
+          python surface_hirise/validate_output.py _hires_surface/full_resolution
+      - name: Promote full-resolution terrain when valid, otherwise retain authentic 256m
+        run: |
+          if [ "${{ steps.full_surface.outcome }}" = "success" ]; then
+            rm -rf _hires_surface/Mars_Jezero_Real_Surface
+            mv _hires_surface/full_resolution _hires_surface/Mars_Jezero_Real_Surface
+            echo "Full 1024m real HiRISE build selected"
+          else
+            echo "::warning::Full 1024m build unavailable. Delivering genuine 256m/1m DTM subset with exact science labels."
+          fi
+          python surface_hirise/validate_output.py _hires_surface/Mars_Jezero_Real_Surface
+      - name: Bundle independent web viewer and source scripts
+        run: |
+          python surface_hirise/build_bundle.py _hires_surface/Mars_Jezero_Real_Surface
+      - name: Live Chrome/WebGL audit with screenshot
+        continue-on-error: true
+        timeout-minutes: 5
+        run: node surface_hirise/smoke_preview.cjs
+      - name: Publish scientific 1m Martian surface ZIP payload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_Jezero_Real_Surface_HiRISE_1m
+          path: _hires_surface/Mars_Jezero_Real_Surface/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Publish browser screenshots and verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_Jezero_HiRISE_Real_Evidence
+          path: surface_hirise/_evidence/
+          if-no-files-found: warn
+          retention-days: 7
