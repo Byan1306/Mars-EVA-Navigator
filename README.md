@@ -148,6 +148,10 @@ See [LICENSE](LICENSE). The repository is public but not open-source licensed; r
 | `curiosity_explorer.js` | Curiosity timeline, full track loader, NASA photo viewer |
 | `curiosity_explorer.css` | Responsive mission explorer styles |
 | `tests/curiosity.test.cjs` | JavaScript and mission-data regression tests |
+| `curiosity_pro.css` | Mission-control visual redesign |
+| `curiosity_360_renderer.js` | WebGL cylindrical panorama projection |
+| `scripts/stitch_curiosity_panorama.py` | Optional OpenCV real-photography stitch tool |
+| `tests/curiosity-mission-control.test.cjs` | High-resolution map and NASA photo archive tests |
 
 The local catalog database is included. If that database is removed, the server may require a separate `catalog_seed.json` file to rebuild the catalog; that seed file is not currently published in this repository.
 
@@ -163,11 +167,51 @@ Choose **Ruta Curiosity · 360°** in the top navigation. This independent view 
 
 ### Scientific provenance and limitations
 
-**NASA/JPL-Caltech** owns the mission geometry; [azmth.space](https://azmth.space/mars/data) distributes its compilation under **CC BY 4.0**. The original NASA MMGIS traverse has no per-vertex time labels; the compiler assigns exact sols to NASA waypoints and interpolates between them. Panoramas are associated with the path by documented **sol**, not independently verified camera coordinates. The rendered path is not a certified EVA route. The Mars Trek Viking base imagery is a coarse global mosaic, not HiRISE/CTX high-resolution Gale imagery. The displayed geometric trail length is not NASA rover odometry.
+**NASA/JPL-Caltech** owns the mission geometry; [azmth.space](https://azmth.space/mars/data) distributes its compilation under **CC BY 4.0**. The original NASA MMGIS traverse has no per-vertex time labels; the compiler assigns exact sols to NASA waypoints and interpolates between them. Panoramas are associated with the path by documented **sol**, not independently verified camera coordinates. The rendered path is not a certified EVA route. The redesigned Curiosity viewer now uses actual NASA HiRISE/CTX mosaics where each has coverage, backed by the coarse Viking global mosaic. The displayed geometric trail length is not NASA rover odometry.
 
 All panoramas link to NASA Science original resource pages and retain NASA/JPL-Caltech camera credits. Images are fetched as needed rather than bundled, and third-party rights remain unchanged.
 
 Verification: `node --test tests/curiosity.test.cjs` and `node --check curiosity_explorer.js`, in addition to the existing Python tests.
+
+## Curiosity Mission Control — high-resolution Gale imagery and NASA photo explorer
+
+The Curiosity tab is now a **map-first mission control** with a redesigned interface. It layers three official [NASA Mars Trek WMTS](https://trek.nasa.gov/tiles/apidoc/trekAPI.html?body=mars) products: 
+
+- **HiRISE rover-site mosaic:** `curiosity_hirise_mosaic` — highest-detail NASA Trek product available for the original roving-site mosaic footprint (roughly 137.122–137.730°E, 4.925–4.249°S).
+- **MRO CTX Gale crater mosaic:** `Gale_CTX_BlockAdj_dd` — wider regional coverage (roughly 135.184–139.241°E, 6.573–2.808°S), visible under HiRISE or as a standalone choice.
+- **Viking global mosaic:** fallback outside regional coverage; its native resolution is about 232 m/pixel and should never be mistaken for a sharp local orbiter view.
+
+The map is rendered with actual NASA WMTS tiles rather than upscaled screenshots. WMTS availability, coverage and maximum *native* zoom depend on the server and are not guaranteed to match this app's zoom level. High-resolution tiles are not universally available for all Mars coordinates. See [USGS 25 cm/pixel Gale mosaic](https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_orthophoto_mosaic_25cm) (23 GB lossless scientific source, **not embedded or served from the browser**).
+
+### NASA original-image browser
+
+For any selected mission sol, choose a camera and click **Cargar fotos reales**. The app queries the [NASA Mars Curiosity raw image API](https://mars.nasa.gov/msl/multimedia/raw-images/), 24 results per page, and shows original image links. NASA currently lists hundreds of thousands of Curiosity frames. If the API or image host blocks a browser request, the direct NASA archive link remains available; an API outage is not shown as an empty scientific record.
+
+Individual photos are **not** classified as 360 panoramas. Published, documented cylindrical NASA panoramas also have a 360° horizontal WebGL perspective mode. This is a projection of genuine NASA panoramic pixels, not generated 3D geometry or a 360×180 spherical recording. WebGL2 and image-host CORS are needed; otherwise the accessible draggable image view remains.
+
+### Experimental stitching of multiple NASA photos
+
+Download a small set (3–30) of **original overlapping frames from the same stationary camera sequence and sol**, preserving the NASA URL, source camera and timestamp for each. To attempt a panorama locally:
+
+```powershell
+python -m pip install opencv-python-headless
+python scripts/stitch_curiosity_panorama.py --input-dir .\raw_nasa_frames --sol 4287 --output curiosity_panorama_experimental.jpg
+```
+
+Open the Curiosity tab, under **Laboratorio fotográfico** select the new JPEG. It will display locally, and if its aspect ratio allows it can be explored as a cylinder. Successful stitching depends on the images having sufficient matching features and camera overlap. A single day often contains photos from **several locations and camera directions**, so selecting the same sol alone does not guarantee a coherent panorama. The generated `.provenance.json` includes SHA-256 hashes and explicitly marks full 360° coverage, camera geolocation, and 3D depth as **unverified**; add each photo's original official NASA URL before publishing.
+
+**This release is not a continuous Mars Street View.** No verified complete 360° spherical image exists for every point along Curiosity's driven route. Building an interpolated free-roam 3D environment would require a separate photogrammetry/NeRF/3D Gaussian Splatting pipeline with camera calibration, pose estimation, a DEM, provenance, error estimates and explicit labels for reconstructed or missing areas.
+
+### Verification
+
+```powershell
+node --check curiosity_explorer.js
+node --check curiosity_360_renderer.js
+node --test tests/curiosity.test.cjs tests/curiosity-mission-control.test.cjs
+python -m unittest discover -s tests -v
+```
+
+All photos and map tiles are loaded on demand and are not redistributed as part of the source repository. Original data and image use/attribution terms apply.
 
 ## Scientific limitations
 

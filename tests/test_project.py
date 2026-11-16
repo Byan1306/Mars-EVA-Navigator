@@ -86,6 +86,27 @@ class WebTests(unittest.TestCase):
         self.assertIn(target, index)
         self.assertTrue((root / target).is_file())
 
+    def test_mission_control_assets_are_accessible_locally(self):
+        with TestClient(app) as client:
+            self.assertEqual(client.get('/curiosity_pro.css').status_code, 200)
+            self.assertIn('text/css', client.get('/curiosity_pro.css').headers.get('content-type', ''))
+            self.assertEqual(client.get('/curiosity_360_renderer.js').status_code, 200)
+            self.assertIn('javascript', client.get('/curiosity_360_renderer.js').headers.get('content-type', ''))
+            self.assertEqual(client.get('/scripts/stitch_curiosity_panorama.py').status_code, 404)
+
+    def test_stitching_manifest_never_claims_native_3d_or_verified_360(self):
+        from scripts.stitch_curiosity_panorama import find_images, make_manifest
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            for i in range(3):
+                (directory / f'NASA_{i}.jpg').write_bytes(f'FAKE_UNIT_TEST_{i}'.encode())
+            paths = find_images(directory, 30)
+            data = make_manifest(paths, directory / 'stitch.jpg', 1200, (500, 2000, 3))
+            self.assertEqual(len(data['sources']), 3)
+            self.assertEqual(data['coverage_360_degrees'], 'NOT VERIFIED')
+            self.assertFalse(data['native_3d_depth'])
+            self.assertEqual(data['sol'], 1200)
+
     def test_curiosity_assets_available_without_exposing_private_files(self):
         with TestClient(app) as client:
             javascript = client.get('/curiosity_explorer.js')

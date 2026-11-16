@@ -10,6 +10,17 @@
   const NASA_LOCATION = 'https://science.nasa.gov/mission/msl-curiosity/location-map/';
   const MARS_RADIUS_M = 3396190;
   const BASE_TILES = 'https://trek.nasa.gov/tiles/Mars/EQ/Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/{z}/{y}/{x}.jpg';
+  const NASA_TILES = Object.freeze({
+    hirise: 'https://trek.nasa.gov/tiles/Mars/EQ/curiosity_hirise_mosaic/1.0.0/default/default028mm/{z}/{y}/{x}.png',
+    ctx: 'https://trek.nasa.gov/tiles/Mars/EQ/Gale_CTX_BlockAdj_dd/1.0.0/default/default028mm/{z}/{y}/{x}.png'
+  });
+  const HI_BOUNDS = [[-4.9254743,137.1224669],[-4.2489588,137.7298129]];
+  const CTX_BOUNDS = [[-6.5732988,135.1842593],[-2.8077809,139.2413012]];
+  // Missing high-resolution coverage is transparent; regional CTX and Viking stay
+  // underneath. Do not imply that a tile enlarged past its native level adds detail.
+  const NASA_PHOTO_API = 'https://mars.nasa.gov/api/v1/raw_image_items/';
+  const CAMERAS = new Set(['all','NAV_LEFT_A','NAV_RIGHT_A','MAST_LEFT','MAST_RIGHT','MAHLI','FHAZ_LEFT_A']);
+
 
   // All source pages explicitly describe 360-degree panoramas (cylindrical horizontal
   // mosaics or Mastcam panoramic sweeps). Coordinates are NOT asserted by these pages.
@@ -148,13 +159,64 @@
     if (lo > 0 && Math.abs(sols[lo - 1] - targetSol) < Math.abs(sols[lo] - targetSol)) return lo - 1;
     return lo;
   }
-  root.CuriosityData = { parseTraverse, parseOfficialWaypoints, nearestIndex, marsDistanceMeters, PANORAMAS };
+
+  function validatedNASAUrl(url) {
+    if (typeof url !== 'string' || !url) return null;
+    try {
+      const parsed = new URL(url, 'https://mars.nasa.gov/');
+      return parsed.protocol === 'https:' &&
+        (parsed.hostname === 'nasa.gov' || parsed.hostname.endsWith('.nasa.gov')) ? parsed.href : null;
+    } catch (_) { return null; }
+  }
+  function curiosityPhotosURL(sol, camera='all', page=0) {
+    if (!Number.isInteger(sol) || sol < 0 || sol > 10000 ||
+        !CAMERAS.has(camera) || !Number.isInteger(page) || page < 0 || page > 999) {
+      throw Error('Sol, cámara o página fuera del intervalo permitido.');
+    }
+    const params=new URLSearchParams({
+      'condition_1':'msl:mission',
+      'condition_2':sol+':sol:gte',
+      'condition_3':sol+':sol:lte',
+      'per_page':'24', 'page':String(page),
+      'order':'sol desc',
+      'extended':'thumbnail::sample_type::noteq'
+    });
+    if(camera!=='all')params.set('search','|'+camera);
+    return NASA_PHOTO_API+'?'+params.toString();
+  }
+  function normalizeRawPhotos(payload) {
+    const raw = Array.isArray(payload) ? payload :
+      [payload?.items,payload?.images,payload?.data,payload?.results,payload?.raw_image_items].find(Array.isArray) || [];
+    const unique=new Set();
+    const output=[];
+    for(const image of raw) {
+      if(!image || typeof image!=='object')continue;
+      const files=image.image_files || image.files || {};
+      const direct = image.img_src || image.image_url || image.image_src ||
+        image.url || image.image || (typeof files==='object' && (files.large || files.medium || files.full || files.small));
+      const href=validatedNASAUrl(typeof direct==='string'?direct:direct?.url);
+      if(!href || unique.has(href))continue;
+      unique.add(href);
+      const sol=Number(image.sol ?? image.sol_number ?? image.martian_sol);
+      const cam=image.instrument || image.camera || image.instrument_name || image.camera_name || 'Cámara NASA';
+      output.push({
+        url:href, sol:Number.isFinite(sol)?sol:null,
+        camera:typeof cam==='string'?cam:(cam?.name||cam?.instrument||'Cámara NASA'),
+        title:String(image.title||image.imageid||image.image_id||'Fotografía original Curiosity').slice(0,110)
+      });
+    }
+    const total=Number(payload?.total_results ?? payload?.total ?? payload?.count);
+    return {photos:output,total:Number.isFinite(total)?total:null};
+  }
+
+  root.CuriosityData = { parseTraverse, parseOfficialWaypoints, nearestIndex, marsDistanceMeters, PANORAMAS, curiosityPhotosURL, normalizeRawPhotos, validatedNASAUrl };
 
   if (typeof document === 'undefined') return;
 
   const state = { map:null, track:null, allLine:null, progressLine:null, roverMarker:null,
     panoMarkers:[], selectedSol:0, activePano:null, panRatio:0.5, dragging:false,
-    dragStartX:0, dragRatio:0.5, zoom:1, timer:null, loaded:false, loading:false, overlayOpen:false };
+    dragStartX:0, dragRatio:0.5, zoom:1, timer:null, loaded:false, loading:false, overlayOpen:false,
+    tileLayers:null, mapMode:'hirise', rawPage:0, rawSol:null, rawPhotos:[], rawRequest:0, pano3d:null, importUrl:null };
   function id(name) { return document.getElementById(name); }
   function text(name, value) { const node = id(name); if (node) node.textContent = value; }
   function formatNum(x) { return Number(x).toLocaleString('es-CR', {maximumFractionDigits:1}); }
@@ -162,6 +224,34 @@
     return 'https://mars.nasa.gov/msl/multimedia/raw-images/?mission=msl&begin_sol=' + Math.floor(sol) + '&end_sol=' + Math.floor(sol);
   }
   function setStatus(value) { text('curiosity-data-status', value); }
+
+  function updateMapMode(mode) {
+    if (!state.map || !state.tileLayers || !['hirise','ctx','viking'].includes(mode))return;
+    const {global,ctx,hirise}=state.tileLayers;
+    if(!state.map.hasLayer(global))global.addTo(state.map);
+    if(mode==='viking') {
+      if(state.map.hasLayer(hirise))state.map.removeLayer(hirise);
+      if(state.map.hasLayer(ctx))state.map.removeLayer(ctx);
+    } else if(mode==='ctx') {
+      if(state.map.hasLayer(hirise))state.map.removeLayer(hirise);
+      if(!state.map.hasLayer(ctx))ctx.addTo(state.map);
+    } else {
+      if(!state.map.hasLayer(ctx))ctx.addTo(state.map);
+      if(!state.map.hasLayer(hirise))hirise.addTo(state.map);
+    }
+    state.mapMode=mode;
+    const captions={
+      hirise:'HiRISE sobre CTX. Las zonas fuera de la cobertura de HiRISE se muestran en CTX o Viking. No hay superresolución artificial.',
+      ctx:'CTX: cobertura regional del cráter Gale. Zoom excesivo no crea detalle real.',
+      viking:'Viking: mosaico global de aproximadamente 232 m/píxel en origen. Se recomienda usar HiRISE o CTX para detalles.'
+    };
+    text('curiosity-layer-status',captions[mode]);
+    for(const key of ['hirise','ctx','viking']){
+      const btn=id('curiosity-layer-'+key);
+      if(btn){btn.classList.toggle('active',mode===key);btn.setAttribute('aria-pressed',String(mode===key));}
+    }
+  }
+
   function createMap() {
     if (state.map) return;
     if (typeof L === 'undefined') { setStatus('No se cargó Leaflet. Conéctate a Internet y recarga.'); return; }
@@ -169,10 +259,25 @@
       crs:L.CRS.EPSG4326, preferCanvas:true, zoomControl:true,
       center:[-4.66,137.41], zoom:10, minZoom:1, maxZoom:18, worldCopyJump:false
     });
-    L.tileLayer(BASE_TILES, {
-      attribution:'Mosaico global Viking MDIM 232 m: NASA/JPL/USGS — Mars Trek. Ruta: NASA/JPL, azmth.space CC BY 4.0',
+    const global = L.tileLayer(BASE_TILES, {
+      attribution:'NASA/JPL/USGS Mars Trek, Viking MDIM 232 m',
       tileSize:256, maxNativeZoom:7, maxZoom:18, noWrap:true, bounds:[[-90,-180],[90,180]]
     }).addTo(state.map);
+    const ctx = L.tileLayer(NASA_TILES.ctx, {
+      attribution:'NASA/JPL-Caltech/MSSS/USGS — MRO CTX Gale crater mosaic',
+      tileSize:256, minZoom:4, maxNativeZoom:14, maxZoom:18,
+      noWrap:true, bounds:CTX_BOUNDS, opacity:1
+    }).addTo(state.map);
+    const hirise = L.tileLayer(NASA_TILES.hirise, {
+      attribution:'NASA/JPL/University of Arizona/USGS — MRO HiRISE Curiosity mosaic',
+      tileSize:256, minZoom:7, maxNativeZoom:16, maxZoom:18,
+      noWrap:true, bounds:HI_BOUNDS, opacity:1
+    }).addTo(state.map);
+    state.tileLayers={global,ctx,hirise};
+    updateMapMode('hirise');
+    let highResTiles=0;
+    hirise.on('tileload',function(){highResTiles++;if(highResTiles===1&&state.mapMode==='hirise') text('curiosity-layer-status','HiRISE cargado sobre CTX, con transparencia fuera de su huella. Zoom superior a los datos disponibles no agrega detalle real.');});
+    hirise.on('tileerror',function(){if(!highResTiles&&state.mapMode==='hirise')text('curiosity-layer-status','HiRISE no respondió en esta zona o escala; permanece visible el contexto CTX/Viking. Puedes alternar de capa.');});
     state.allLine = L.polyline([], { color:'#6b84a5', weight:3, opacity:.48, smoothFactor:.6, interactive:false }).addTo(state.map);
     state.progressLine = L.polyline([], { color:'#ffae52', weight:4, opacity:.95, smoothFactor:.5, interactive:false }).addTo(state.map);
     state.roverMarker = L.circleMarker([-4.59,137.44], {radius:8,color:'#fff',weight:2,fillColor:'#ff9d37',fillOpacity:1}).addTo(state.map);
@@ -232,6 +337,7 @@
       : 'Fecha de parada NASA; entre paradas la línea es una unión recta aproximada.');
     const photoUrl = id('curiosity-raw-images');
     photoUrl.href = sourceUrlForSol(state.selectedSol);
+    if(state.rawSol!==Math.round(state.selectedSol)) {state.rawSol=null;state.rawPage=0;text('curiosity-photo-feed-status','Pulsa «Cargar fotos reales» para consultar las fotografías NASA de este sol.');}
     if (focus) state.map.setView(pos, Math.max(state.map.getZoom(), 12));
     id('curiosity-restart').disabled = index === 0;
     id('curiosity-latest').disabled = index === track.coords.length-1;
@@ -252,8 +358,8 @@
     text('curiosity-last-update', track.fetched);
     text('curiosity-source-description', track.attribution + ' ' + track.notes);
     text('curiosity-map-caption', track.sourceKind === 'full'
-      ? 'Línea: geometría recorrida publicada por NASA/JPL y compilada por azmth.space. Sols intermedios interpolados; mosaico base Viking de 232 m, no imagen orbital de alta resolución.'
-      : 'MODO DEGRADADO: puntos de parada NASA unidos por segmentos rectos, NO traza real de las ruedas. Para ver el recorrido íntegro, se necesita la compilación completa.');
+      ? 'Trayectoria histórica NASA/JPL-Caltech, compilación azmth.space. Sols intermedios interpolados. Base cartográfica: NASA Mars Trek, HiRISE + CTX + Viking (capas por cobertura, sin detalle inventado).'
+      : 'MODO DEGRADADO: paradas NASA unidas por segmentos rectos. NO representan el trazado real de las ruedas; la compilación completa no está disponible.');
     drawPanoMarkers();
     selectSol(track.sols[track.sols.length-1], false);
     state.loaded=true;
@@ -332,6 +438,114 @@
     document.body.appendChild(anchor);anchor.click();anchor.remove();
     setTimeout(function(){URL.revokeObjectURL(url);},2000);
   }
+
+  // Raw NASA photos are individual images, not automatically omnidirectional.
+
+  function importPanoramaFile(file) {
+    const status=id('curiosity-import-status');
+    if(!file)return;
+    if(!['image/jpeg','image/png'].includes(file.type) || file.size>60*1024*1024) {
+      status.textContent='Se necesita un JPG o PNG de máximo 60 MB. Divide o reduce mosaicos más grandes con una herramienta de imagen.';
+      return;
+    }
+    if(state.importUrl){URL.revokeObjectURL(state.importUrl);state.importUrl=null;}
+    const url=URL.createObjectURL(file);
+    state.importUrl=url;
+    state.activePano={imported:true,sol:null,image:url};
+    text('curiosity-photo-title','Mosaico local experimental · '+file.name);
+    text('curiosity-photo-caption','Resultado ensamblado aportado por el usuario. No se ha verificado que cubra 360 grados ni que su cámara tenga una geolocalización exacta. No representa un modelo tridimensional.');
+    const source=id('curiosity-photo-source');
+    source.href='https://mars.nasa.gov/msl/multimedia/raw-images/';
+    source.textContent='Consultar archivo original NASA ↗';
+    id('curiosity-photo-dialog').hidden=false;
+    const image=id('curiosity-photo-image'),error=id('curiosity-photo-error');
+    state.panRatio=.5;state.zoom=1;id('curiosity-zoom').value='1';
+    error.hidden=false;error.textContent='Abriendo mosaico local…';
+    image.onload=function(){error.hidden=true;positionPhoto();};
+    image.onerror=function(){error.hidden=false;error.textContent='No se pudo leer la imagen local.';};
+    image.src=url;
+    status.textContent='Mosaico importado para previsualización local. La cobertura 360° y la precisión de las uniones siguen sin estar verificadas.';
+    if(state.pano3d) {
+      state.pano3d.load(url).then(function(ok){
+        if(ok && state.activePano?.image===url) {
+          error.hidden=true;
+          text('curiosity-photo-caption','Vista cilíndrica inmersiva basada en el mosaico local. La imagen procede de los archivos seleccionados por el usuario; no hay terreno ni fotografías generadas artificialmente. Cobertura completa: SIN VERIFICAR.');
+        }
+      }).catch(function(){if(state.activePano?.image===url)status.textContent='La imagen no tiene el formato necesario para proyección cilíndrica; puedes explorarla como fotografía plana.';});
+    }
+  }
+
+  function showRawPhoto(photo) {
+    stopPlayback();
+    state.activePano={raw:true,sol:photo.sol,source:photo.url,url:photo.url};
+    document.querySelectorAll('.curiosity-panorama-item').forEach(function(b){b.classList.remove('active');});
+    text('curiosity-photo-title',(photo.camera||'Cámara NASA')+' · Sol '+(photo.sol??'?'));
+    text('curiosity-photo-caption','Fotografía individual original NASA/JPL-Caltech, sin proyección 360° ni coordenadas de cámara verificadas. Para construir un panorama correcto se requieren múltiples tomas solapadas del mismo punto e información de calibración.');
+    id('curiosity-photo-source').href=photo.url;
+    id('curiosity-photo-source').textContent='Abrir fotografía NASA ↗';
+    id('curiosity-photo-dialog').hidden=false;
+    state.panRatio=.5;state.zoom=1;id('curiosity-zoom').value='1';
+    const error=id('curiosity-photo-error');
+    error.hidden=false;error.textContent='Cargando fotografía original NASA…';
+    const img=id('curiosity-photo-image');
+    img.onload=function(){error.hidden=true;positionPhoto();};
+    img.onerror=function(){error.hidden=false;error.textContent='Esta imagen no se pudo cargar; pulsa «Abrir original NASA».';};
+    img.src=photo.url;
+    if(state.pano3d)state.pano3d.disable();
+  }
+  function renderRawPhotos() {
+    const grid=id('curiosity-raw-grid');
+    grid.textContent='';
+    for(const photo of state.rawPhotos) {
+      const button=document.createElement('button');
+      button.className='curiosity-raw-card';
+      button.type='button';
+      button.title='Abrir foto NASA; imagen individual, no panorámica 360°';
+      const image=document.createElement('img');
+      image.loading='lazy'; image.decoding='async'; image.src=photo.url;
+      image.alt=(photo.camera||'Cámara NASA')+' • Sol '+(photo.sol??'?');
+      image.onerror=function(){image.style.display='none';};
+      const label=document.createElement('span');
+      const camera=document.createElement('strong');camera.textContent=photo.camera||'NASA Curiosity';
+      const sol=document.createElement('small');sol.textContent=' · Sol '+(photo.sol??'?')+' · imagen individual';
+      label.append(camera,sol);button.append(image,label);
+      button.addEventListener('click',function(){showRawPhoto(photo);});
+      grid.append(button);
+    }
+  }
+  async function loadRawPhotos(page=0) {
+    if(!state.track){text('curiosity-photo-feed-status','Primero carga la trayectoria para identificar un sol.');return;}
+    const sol=Math.round(state.selectedSol), camera=id('curiosity-camera-select').value;
+    const request=++state.rawRequest;
+    state.rawPage=page;state.rawSol=sol;
+    id('curiosity-raw-grid').textContent='';
+    text('curiosity-photo-feed-status','Consultando archivo NASA • Sol '+sol+' • página '+(page+1)+'…');
+    id('curiosity-photos-prev').disabled=true;
+    id('curiosity-photos-next').disabled=true;
+    try{
+      const response=await fetchJSON(curiosityPhotosURL(sol,camera,page),18000);
+      if(request!==state.rawRequest)return;
+      const normalized=normalizeRawPhotos(response);
+      state.rawPhotos=normalized.photos;
+      renderRawPhotos();
+      text('curiosity-photo-feed-status',normalized.photos.length
+        ? normalized.photos.length+' imágenes originales recibidas de NASA para el sol '+sol+
+          (normalized.total!==null?' · '+formatNum(normalized.total)+' resultados disponibles':'')
+        : 'Sin imágenes accesibles con esos filtros. Abre el archivo NASA para ampliar la búsqueda.');
+      text('curiosity-photos-page','Página '+(page+1));
+      id('curiosity-photos-prev').disabled=page===0;
+      id('curiosity-photos-next').disabled=normalized.total!==null
+        ? (page+1)*24>=normalized.total
+        : normalized.photos.length<24;
+    }catch(e){
+      if(request!==state.rawRequest)return;
+      state.rawPhotos=[];
+      text('curiosity-photo-feed-status','No fue posible consultar el API de NASA ('+(e.message||e)+'). Usa «Archivo NASA completo» para este sol.');
+      id('curiosity-photos-prev').disabled=page===0;
+      id('curiosity-photos-next').disabled=true;
+    }
+  }
+
   function renderPanoList() {
     const list=id('curiosity-panorama-list');
     list.textContent='';
@@ -366,6 +580,8 @@
     id('curiosity-photo-image').onload=null;
     state.activePano=null;
     state.dragging=false;
+    if(state.pano3d)state.pano3d.disable();
+    if(state.importUrl){ URL.revokeObjectURL(state.importUrl);state.importUrl=null; }
     document.querySelectorAll('.curiosity-panorama-item').forEach(function(b){b.classList.remove('active');});
   }
   function openPanorama(panoId) {
@@ -378,17 +594,33 @@
     text('curiosity-photo-title',p.name+' · SOL '+p.sol);
     text('curiosity-photo-caption',p.camera+'. '+p.note+' El punto del mapa procede del recorrido por sol, NO de una geolocalización independiente de la cámara.');
     id('curiosity-photo-source').href=p.source;
+    id('curiosity-photo-source').textContent='Abrir panorámica original NASA ↗';
     id('curiosity-photo-dialog').hidden=false;
     state.zoom=1;state.panRatio=.5;id('curiosity-zoom').value='1';
     const photo=id('curiosity-photo-image'),err=id('curiosity-photo-error');
     photo.onload=function(){ err.hidden=true; positionPhoto(); };
     photo.onerror=function(){err.hidden=false;err.textContent='No se pudo mostrar una versión ligera del panorama. Abre la ficha original de NASA usando el enlace superior.';};
     if (p.image) {
-      err.hidden=false;err.textContent='Cargando panorama NASA…';
+      err.hidden=false;err.textContent='Cargando panorama original NASA…';
       photo.src=p.image;
+      // Immersive cylindrical projection uses NASA's own panorama. It only runs
+      // when image CORS, WebGL2 and a panoramic aspect ratio are available.
+      // The ordinary scrollable image remains a lossless fallback.
+      if (state.pano3d) {
+        state.pano3d.load(p.image).then(function(ready){
+          if(ready && state.activePano===p){
+            err.hidden=true;
+            text('curiosity-photo-caption',p.camera+'. '+p.note+
+              ' Vista cilíndrica 360° real: arrastra para girar, rueda del ratón para cambiar el campo de visión. No existe profundidad 3D reconstruida.');
+          }
+        }).catch(function(){
+          if(state.activePano===p)text('curiosity-photo-caption',p.camera+'. '+p.note+
+            ' Vista 360° horizontal en modo imagen: mueve el ratón o arrastra de izquierda a derecha. La proyección WebGL depende del acceso CORS del servidor NASA.');
+        });
+      }
     } else {
       photo.removeAttribute('src');
-      err.hidden=false;err.textContent='La versión original de esta panorámica es grande o no dispone de miniatura verificada. Ábrela en NASA desde el enlace superior.';
+      err.hidden=false;err.textContent='Esta panorámica NASA no dispone aquí de imagen directa verificable. Pulsa «Abrir original NASA» para ver la versión oficial.';
     }
   }
   async function openExplorer() {
@@ -413,12 +645,23 @@
   function init() {
     if (!id('tab-curiosity') || !id('curiosity-explorer')) return;
     renderPanoList();
+    if (root.CuriosityPano360) {
+      state.pano3d=new root.CuriosityPano360(id('curiosity-photo-canvas'));
+    }
     id('tab-curiosity').addEventListener('click',openExplorer);
     id('curiosity-close').addEventListener('click',closeExplorer);
     ['tab-explorer','tab-jezero'].forEach(function(name){
       id(name).addEventListener('click',function(){if (state.overlayOpen) closeExplorer();});
     });
     id('curiosity-reload').addEventListener('click',loadTrail);
+    for(const mode of ['hirise','ctx','viking']){
+      id('curiosity-layer-'+mode).addEventListener('click',function(){updateMapMode(mode);});
+    }
+    id('curiosity-load-photos').addEventListener('click',function(){loadRawPhotos(0);});
+    id('curiosity-import-file').addEventListener('change',function(e){importPanoramaFile(e.target.files?.[0]);});
+    id('curiosity-camera-select').addEventListener('change',function(){if(state.rawSol!==null)loadRawPhotos(0);});
+    id('curiosity-photos-prev').addEventListener('click',function(){if(state.rawPage>0)loadRawPhotos(state.rawPage-1);});
+    id('curiosity-photos-next').addEventListener('click',function(){loadRawPhotos(state.rawPage+1);});
     id('curiosity-fit').addEventListener('click',function(){
       if (state.map && state.track) state.map.fitBounds(L.latLngBounds(state.track.coords).pad(.08),{padding:[18,18],maxZoom:14});
     });

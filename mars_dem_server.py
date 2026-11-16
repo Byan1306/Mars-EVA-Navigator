@@ -123,6 +123,24 @@ def curiosity_styles():
         raise HTTPException(404, 'Falta curiosity_explorer.css.')
     return FileResponse(path, media_type='text/css')
 
+
+# Curiosity Mission Control: only these public assets are exposed.
+@app.get('/curiosity_pro.css', include_in_schema=False)
+def curiosity_professional_styles():
+    path = BASE_DIR / 'curiosity_pro.css'
+    if not path.is_file():
+        raise HTTPException(404, 'Falta curiosity_pro.css.')
+    return FileResponse(path, media_type='text/css')
+
+
+@app.get('/curiosity_360_renderer.js', include_in_schema=False)
+def curiosity_panorama_renderer():
+    path = BASE_DIR / 'curiosity_360_renderer.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Falta curiosity_360_renderer.js.')
+    return FileResponse(path, media_type='application/javascript')
+
+
 @app.get('/api/status')
 def estado():
     try:
