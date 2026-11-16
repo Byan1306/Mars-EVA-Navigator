@@ -847,6 +847,8 @@
         <p>Reserva de planificación: 20% del tiempo total. No equivale a autonomía certificada del traje.</p>
         <p id="mission-status" role="status" aria-live="polite">Carga el DEM para planificar.</p>
         <div id="mission-summary" aria-live="polite"></div>
+        <button id="mission-quick-start" class="mini-btn mission-primary-cta" type="button">▶ RESTAURAR DEMOSTRACIÓN REAL</button>
+        <p class="mission-helper">Ruta corta preparada dentro de la cobertura USGS · podés ajustar los puntos con el ratón.</p>
         <button id="mission-fit" class="mini-btn">Ver cobertura del DEM</button>
       </section>
       <div class="card-block">
@@ -1349,6 +1351,7 @@
       }
     ];
 
+    const JEZERO_DEMO={orig:[18.4447,77.4508],dest:[18.4401,77.4557]};
     const PRESETS = {
       jezero_butler:    { orig: [18.4447, 77.4508], dest: [18.4589, 77.4036], zoom: 11, analog: false },
       gale_boxwork:     { orig: [-4.7250, 137.8450], dest: [-4.7580, 137.8780], zoom: 11, analog: false },
@@ -1410,8 +1413,8 @@
       // Capas superpuestas activas
       layers: {
         mineral: false,
-        hazard: true,
-        shield: true,
+        hazard: false,
+        shield: false,
         pnr: false
       },
 
@@ -1558,6 +1561,11 @@
 
       markerOrig.on('dragend', () => {
         const ll = markerOrig.getLatLng();
+        if(APP.section==='jezero' && APP.tifDem && !pointCoveredByDem([ll.lat,ll.lng])){
+          markerOrig.setLatLng(APP.origLatLng);
+          document.getElementById('route-search-status').textContent='Origen fuera de la cobertura real: no se cambió.';
+          return;
+        }
         APP.origLatLng = [ll.lat, ll.lng];
         stopEvaSimulation();
         onMissionUpdated();
@@ -1565,6 +1573,11 @@
 
       markerDest.on('dragend', () => {
         const ll = markerDest.getLatLng();
+        if(APP.section==='jezero' && APP.tifDem && !pointCoveredByDem([ll.lat,ll.lng])){
+          markerDest.setLatLng(APP.destLatLng);
+          document.getElementById('route-search-status').textContent='Destino fuera de la cobertura real: no se cambió.';
+          return;
+        }
         APP.destLatLng = [ll.lat, ll.lng];
         stopEvaSimulation();
         onMissionUpdated();
@@ -1573,6 +1586,11 @@
       map.on('click', (e) => {
         const lat = Math.max(-89.5, Math.min(89.5, e.latlng.lat));
         const lon = Math.max(-179.9, Math.min(179.9, e.latlng.lng));
+        if(APP.section==='jezero' && APP.tifDem && !pointCoveredByDem([lat,lon])){
+          document.getElementById('route-search-status').textContent=
+            'Punto fuera del DEM USGS: conserva la ruta actual. Usa «Restaurar misión» para volver al recorrido.';
+          return;
+        }
         stopEvaSimulation();
         if (APP.clickMode === 'orig') {
           APP.origLatLng = [lat, lon];
@@ -2882,9 +2900,11 @@
       document.getElementById('routes-container').textContent = message;
       document.getElementById('mission-status').textContent = message;
       document.getElementById('mission-summary').textContent = '';
-      document.getElementById('dem-source-banner').textContent = message;
-      document.getElementById('hdr-dem-label').textContent = 'DEM: planificación pendiente';
-      document.getElementById('hdr-dem-dot').className = 'dot amber';
+      document.getElementById('dem-source-banner').textContent =
+        APP.tifDem ? 'DEM REAL USGS · '+APP.tifDem.sourceName : message;
+      document.getElementById('hdr-dem-label').textContent =
+        APP.tifDem ? 'DEM REAL · rutas en revisión' : 'DEM: carga pendiente';
+      document.getElementById('hdr-dem-dot').className=APP.tifDem?'dot':'dot amber';
       document.getElementById('elev-profile-svg').innerHTML = '';
       ['val-topo','val-bio','val-rad','val-atmo'].forEach(id => document.getElementById(id).querySelector('p').textContent = 'Sin ruta calculada.');
       document.getElementById('btn-sim-eva').disabled = true;
@@ -2985,6 +3005,17 @@
       el.textContent = `Ida: ${formatDuration(out.timeMin)} · Regreso calculado: ${formatDuration(back.timeMin)} · Ciencia: ${science} min · Reserva: ${Math.round(reserve)} min. Total de marcha y ciencia: ${formatDuration(total)}. ${total+reserve<=budget ? 'Dentro del presupuesto temporal.' : 'Excede el presupuesto temporal: acorta la misión.'} No verifica autonomía de O₂ ni seguridad operacional.`;
     }
 
+    function restoreJezeroDemo(){
+      if(APP.section!=='jezero')switchSection('jezero');
+      APP.origLatLng=[...JEZERO_DEMO.orig];APP.destLatLng=[...JEZERO_DEMO.dest];
+      markerOrig.setLatLng(APP.origLatLng);markerDest.setLatLng(APP.destLatLng);
+      showPhotoBasemap();
+      if(jezeroReliefOverlay&&!map.hasLayer(jezeroReliefOverlay))jezeroReliefOverlay.addTo(map);
+      map.fitBounds([APP.origLatLng,APP.destLatLng],{padding:[140,140],maxZoom:13});
+      map.invalidateSize();
+      onMissionUpdated();
+    }
+
     function switchSection(section) {
       if (APP.section === section) return;
       stopEvaSimulation(); closeRealPanorama();
@@ -2993,7 +3024,11 @@
       APP.section = section;
       const saved = APP.sectionStates[section];
       if (saved) Object.assign(APP,saved.values);
-      else { APP.origLatLng=[...PRESETS.jezero_butler.orig]; APP.destLatLng=[...PRESETS.jezero_butler.dest]; APP.isAnalogEarth=false; APP.analogWeatherOverride=null; }
+      else {
+        APP.origLatLng=[...(section==='jezero'?JEZERO_DEMO.orig:PRESETS.jezero_butler.orig)];
+        APP.destLatLng=[...(section==='jezero'?JEZERO_DEMO.dest:PRESETS.jezero_butler.dest)];
+        APP.isAnalogEarth=false;APP.analogWeatherOverride=null;
+      }
       const jezero = section === 'jezero';
       APP.demoTerrain=false;
       document.getElementById('allow-demo-terrain').checked=false;
@@ -3005,10 +3040,18 @@
       document.getElementById('section-caption').textContent = jezero ? 'Jezero · terreno real obligatorio · ida y regreso' : 'Exploración general · escenarios demostrativos';
       ['explorer','jezero'].forEach(k=>document.getElementById('tab-'+k).setAttribute('aria-pressed',String(k===section)));
       for (const [id,key] of [['ctrl-crew','crewMode'],['ctrl-solar','solarScenario'],['ctrl-ls','solarLs'],['ctrl-ltst','ltstWindow'],['ctrl-mass','massKg']]) document.getElementById(id).value=APP[key];
-      markerOrig.setLatLng(APP.origLatLng); markerDest.setLatLng(APP.destLatLng);
-      map.setMaxBounds(jezero ? [[18,76.5],[19,78]] : null);
-      if (saved) map.setView(saved.center,saved.zoom);
-      else map.fitBounds([APP.origLatLng,APP.destLatLng],{padding:[30,30]});
+      if(jezero && APP.tifDem &&
+        (!pointCoveredByDem(APP.origLatLng)||!pointCoveredByDem(APP.destLatLng))){
+        APP.origLatLng=[...JEZERO_DEMO.orig];APP.destLatLng=[...JEZERO_DEMO.dest];
+      }
+      markerOrig.setLatLng(APP.origLatLng);markerDest.setLatLng(APP.destLatLng);
+      map.setMaxBounds(jezero?[[18.15,77.10],[18.80,77.75]]:null);
+      if(jezero){
+        showPhotoBasemap();
+        if(jezeroReliefOverlay&&!map.hasLayer(jezeroReliefOverlay))jezeroReliefOverlay.addTo(map);
+      }else if(jezeroReliefOverlay&&map.hasLayer(jezeroReliefOverlay))map.removeLayer(jezeroReliefOverlay);
+      if(saved&&!jezero)map.setView(saved.center,saved.zoom);
+      else map.fitBounds([APP.origLatLng,APP.destLatLng],{padding:[140,140],maxZoom:13});
       map.invalidateSize(); onMissionUpdated();
     }
 
@@ -3575,6 +3618,7 @@
       document.getElementById('btn-nearby-safe').onclick=proposeNearbySafePoints;
       document.getElementById('tab-explorer').onclick = () => switchSection('explorer');
       document.getElementById('tab-jezero').onclick = () => switchSection('jezero');
+      document.getElementById('mission-quick-start').onclick=restoreJezeroDemo;
       document.getElementById('mission-fit').onclick = () => {
         if (APP.tifDem) { const b=APP.tifDem.fullBbox; map.fitBounds([[b[1],b[0]],[b[3],b[2]]]); }
       };
@@ -3763,7 +3807,8 @@
         }
       });
 
-      onMissionUpdated();
+      // NASA Space Apps jury walkthrough: begin on the verifiable Jezero mission.
+      switchSection('jezero');
       tryConnectBackendOrPrecomputed(true);
     });
   </script>
