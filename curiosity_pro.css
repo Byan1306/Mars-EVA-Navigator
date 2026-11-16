@@ -201,3 +201,13 @@
   #curiosity-explorer #curiosity-map-caption {left:8px;right:8px;bottom:8px;max-height:50px;overflow:hidden}
 }
 @media (prefers-reduced-motion:reduce){#curiosity-explorer *{scroll-behavior:auto!important;transition:none!important}}
+
+/* GPU-based inside-the-panorama perspective, with plain-image fallback. */
+#curiosity-explorer #curiosity-photo-canvas {
+  position:absolute;inset:0;width:100%;height:100%;z-index:2;
+  cursor:grab;touch-action:none;background:#0e1116;
+}
+#curiosity-explorer #curiosity-photo-canvas:active{cursor:grabbing}
+#curiosity-explorer #curiosity-photo-canvas[hidden]{display:none!important}
+#curiosity-explorer #curiosity-photo-error[hidden]{display:none!important}
+#curiosity-explorer #curiosity-photo-error {z-index:1}
