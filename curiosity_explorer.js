@@ -563,11 +563,26 @@
     photo.onload=function(){ err.hidden=true; positionPhoto(); };
     photo.onerror=function(){err.hidden=false;err.textContent='No se pudo mostrar una versión ligera del panorama. Abre la ficha original de NASA usando el enlace superior.';};
     if (p.image) {
-      err.hidden=false;err.textContent='Cargando panorama NASA…';
+      err.hidden=false;err.textContent='Cargando panorama original NASA…';
       photo.src=p.image;
+      // Immersive cylindrical projection uses NASA's own panorama. It only runs
+      // when image CORS, WebGL2 and a panoramic aspect ratio are available.
+      // The ordinary scrollable image remains a lossless fallback.
+      if (state.pano3d) {
+        state.pano3d.load(p.image).then(function(ready){
+          if(ready && state.activePano===p){
+            err.hidden=true;
+            text('curiosity-photo-caption',p.camera+'. '+p.note+
+              ' Vista cilíndrica 360° real: arrastra para girar, rueda del ratón para cambiar el campo de visión. No existe profundidad 3D reconstruida.');
+          }
+        }).catch(function(){
+          if(state.activePano===p)text('curiosity-photo-caption',p.camera+'. '+p.note+
+            ' Vista 360° horizontal en modo imagen: mueve el ratón o arrastra de izquierda a derecha. La proyección WebGL depende del acceso CORS del servidor NASA.');
+        });
+      }
     } else {
       photo.removeAttribute('src');
-      err.hidden=false;err.textContent='La versión original de esta panorámica es grande o no dispone de miniatura verificada. Ábrela en NASA desde el enlace superior.';
+      err.hidden=false;err.textContent='Esta panorámica NASA no dispone aquí de imagen directa verificable. Pulsa «Abrir original NASA» para ver la versión oficial.';
     }
   }
   async function openExplorer() {
@@ -592,6 +607,9 @@
   function init() {
     if (!id('tab-curiosity') || !id('curiosity-explorer')) return;
     renderPanoList();
+    if (root.CuriosityPano360) {
+      state.pano3d=new root.CuriosityPano360(id('curiosity-photo-canvas'));
+    }
     id('tab-curiosity').addEventListener('click',openExplorer);
     id('curiosity-close').addEventListener('click',closeExplorer);
     ['tab-explorer','tab-jezero'].forEach(function(name){
