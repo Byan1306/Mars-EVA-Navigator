@@ -21,6 +21,10 @@ PUBLIC_FILES = (
     "curiosity_explorer.css",
     "curiosity_pro.css",
     "curiosity_360_renderer.js",
+    "open_world.html",
+    "open_world.css",
+    "open_world.mjs",
+    "open_world_core.js",
 )
 
 
@@ -36,6 +40,18 @@ def build(output: Path, dem: Path) -> None:
         if not path.is_file():
             raise FileNotFoundError(f"Missing public asset: {name}")
         shutil.copy2(path, output / name)
+    # Bundle Three.js locally: no CDN is needed at runtime.
+    three = ROOT / "node_modules" / "three" / "build" / "three.module.js"
+    if not three.is_file():
+        raise FileNotFoundError("Three.js is missing. Run npm install before building.")
+    (output / "vendor").mkdir(exist_ok=True)
+    shutil.copy2(three, output / "vendor" / "three.module.js")
+    # Optional USGS-registered CTX texture; never ship unverified arbitrary imagery.
+    texture = ROOT / "jezero_ortho.jpg"
+    texture_meta = ROOT / "jezero_ortho_meta.json"
+    if texture.exists() and texture_meta.exists():
+        shutil.copy2(texture, output / texture.name)
+        shutil.copy2(texture_meta, output / texture_meta.name)
     shutil.copy2(source, output / "jezero_dem_precomputed.json")
     print(f"Static NASA science build ready: {output} ({metadata['valid_fraction']:.1%} valid cells)")
 
