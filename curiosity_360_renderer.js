@@ -85,6 +85,7 @@ class Cylindrical360 {
       img.onload=()=>{
         if(request!==this.request){resolve(false);return;}
         try{
+          if(img.naturalWidth < img.naturalHeight*2.5) throw Error('La imagen no tiene formato panorámico cilíndrico adecuado.');
           this.setup();
           const gl=this.gl,max=gl.getParameter(gl.MAX_TEXTURE_SIZE);
           let source=img;
