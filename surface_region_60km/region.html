@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mars EVA Navigator — Jezero 60 km</title>
+<meta name="description" content="Explora 60×60 km de Jezero con relieve CTX auténtico y ubicaciones con nombres de NASA e IAU/USGS.">
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#efe8df;background:#141923;--line:#ffffff24;--muted:#acb3bb;--accent:#daa078}*{box-sizing:border-box}
+body,html{margin:0;height:100%;overflow:hidden}a{color:#edb185}button{font:inherit;cursor:pointer}
+#world{position:fixed;inset:0;width:100%;height:100%;display:block;background:#765a54}
+nav{position:fixed;top:0;left:0;right:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:#111a25eF;border-bottom:1px solid #f6c5a022;z-index:5}
+.brand{font-size:15px;font-weight:850;letter-spacing:.18em}.brand span{display:block;font-size:9px;letter-spacing:.18em;color:#e1a47d;margin-top:4px}
+nav .right{font-size:11px;letter-spacing:.09em;color:#bdc8ce}nav .right a{text-decoration:none}
+aside{position:fixed;top:83px;background:rgba(17,23,31,.91);border:1px solid var(--line);box-shadow:0 12px 40px #0004;z-index:4;border-radius:13px;backdrop-filter:blur(16px)}
+#left{left:20px;width:305px;max-height:calc(100vh - 160px);overflow:auto;padding:19px}
+#right{right:20px;width:260px;padding:15px}
+.eyebrow{font-size:10px;letter-spacing:.17em;font-weight:800;color:var(--accent)}h1{font-size:21px;letter-spacing:-.04em;line-height:1.25;margin:12px 0}
+p{color:#b5c0c9;font-size:11px;line-height:1.65}.separator{border-bottom:1px solid #eec3a32e;margin:16px 0}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stats b{font-size:17px;display:block;color:#f3eadf}.stats span{font-size:9px;color:#a4abb4;display:block;margin-top:4px}
+#places{display:flex;flex-direction:column;gap:4px}
+.place-row{display:flex;align-items:center;gap:12px;border:1px solid transparent;border-radius:7px;background:#ffffff08;color:#eee;width:100%;text-align:left;padding:10px 8px}
+.place-row:hover{background:#ffffff19;border-color:#d0a68342}
+.place-row b{display:block;font-size:12px}.place-row small{display:block;font-size:9px;color:#aab3bf;margin-top:4px}
+.place-symbol{font-size:21px;color:#dfa77f;width:22px;text-align:center}
+#minimap{width:100%;height:auto;aspect-ratio:1;display:block;border-radius:7px;border:1px solid #ffffff25;cursor:crosshair;background:#3c2926}
+.info{font-size:10px;color:#cdbab0;margin-top:12px;line-height:1.6}
+.info strong{display:block;color:#f3d7bb;font-size:13px}
+#selectedInfo{font-size:10px}
+#selectedSource{font-size:11px}
+.controls{position:fixed;z-index:5;bottom:17px;left:50%;transform:translateX(-50%);background:#161b24ec;padding:12px 20px;text-align:center;border:1px solid var(--line);border-radius:12px;font-size:11px;color:#ced4db;min-width:520px;max-width:96vw}
+.controls button{background:#343e4b;color:#ebd7c7;border:1px solid #ddaa8050;border-radius:6px;padding:8px 12px;margin-right:10px}
+.controls b{color:var(--accent)}.location-label{position:fixed;z-index:3;transform:translate(-50%,-50%);pointer-events:auto;color:#fff5e9;background:#1d2029c4;border:1px solid #f2ceae7a;border-radius:20px;white-space:nowrap;padding:6px 10px;font-size:10px;box-shadow:0 2px 8px #0005}
+.location-label:hover{background:#a46844}#annotations{position:fixed;inset:0;pointer-events:none;z-index:3}#annotations .location-label{pointer-events:auto}
+#loader{position:fixed;inset:0;z-index:15;background:linear-gradient(110deg,#141820,#49362f);display:grid;place-content:center;text-align:center}
+#loader h2{font-size:36px;letter-spacing:-.05em}#loadText{max-width:490px;font-size:14px;line-height:1.5;color:#e6ccba}
+#instructions{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:6;background:#dbab80;color:#261e18;border:0;border-radius:8px;padding:12px 17px;font-size:12px}
+.hidden{display:none!important}
+@media(max-width:850px){#left{width:215px;left:7px;top:72px;padding:10px}#right{right:7px;top:72px;width:175px;padding:9px}#left h1{font-size:16px}.controls{bottom:7px;min-width:0;width:95%;padding:8px}.controls .help{font-size:9px}nav{padding:0 10px}.brand{font-size:12px}.right{font-size:8px!important}}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+<canvas id="world" aria-label="Región real de Jezero de 60 kilómetros"></canvas>
+<nav><div class="brand">◈ MARS EVA <span>JEZERO · REGIONAL WORLD / 60 KM</span></div>
+<div class="right">NASA + USGS / CTX 20 m &nbsp;|&nbsp; <a href="./index.html">Proyecto principal ↗</a></div></nav>
+<aside id="left"><div class="eyebrow">EXPLORACIÓN REGIONAL</div><h1>Todo Jezero, a escala real</h1>
+<p>Terreno 3D medido por CTX/USGS: 60 km de ancho por 60 km de largo. La geometría no utiliza montañas artificiales. Puedes navegar por ubicaciones con nombres y fuentes.</p>
+<div class="stats"><div><b id="region">—</b><span>ÁREA DEL MUNDO</span></div><div><b>20 m</b><span>MUESTREO REGIONAL</span></div>
+<div><b id="coverage">—</b><span>COBERTURA REAL</span></div><div><b id="tiles">0</b><span>TILES CARGADOS</span></div>
+<div><b id="elevation">—</b><span>ELEVACIÓN CTX</span></div><div><b id="flight">VUELO</b><span>MODO ACTUAL</span></div></div>
+<div class="separator"></div><span class="eyebrow">LUGARES EN JEZERO</span>
+<p>Selecciona un lugar para viajar. Los centros IAU se distinguen de puntos representativos o aproximados.</p>
+<div id="places"></div><div class="separator"></div>
+<p>El módulo HiRISE de 1 m existente solo cubre 1 km: esta expansión de 60 km utiliza CTX de 20 m. No son 60 km reconstruidos a resolución de 1 m.</p>
+<p><a id="source" target="_blank" rel="noopener noreferrer" href="https://www.usgs.gov/">Consultar datos científicos USGS ↗</a></p>
+</aside>
+<aside id="right"><div class="eyebrow">MAPA DE JEZERO · 60 KM</div>
+<p>Alturas reales de USGS, colores representativos.</p>
+<canvas id="minimap" width="275" height="275"></canvas>
+<div class="info"><strong id="selectedName">Elige un lugar del mapa</strong>
+<div id="selectedInfo">Los marcadores muestran nombres oficiales o puntos de referencia documentados.</div>
+<a id="selectedSource" hidden target="_blank" rel="noopener noreferrer" href="#">Ver fuente oficial ↗</a>
+<p>Coordenadas locales X/Z: <span id="localCoords">—</span></p>
+<p><label><input id="showLabels" type="checkbox" checked> Ver nombres sobre el paisaje</label></p>
+</div></aside>
+<div id="annotations"></div>
+<div class="controls"><button id="toggleMode">Caminar / Volar (F)</button><span class="help"><b>WASD</b> desplazarte · <b>RATÓN</b> mirar · <b>SHIFT</b> rápido · <b>ESPACIO/C</b> subir/bajar · <b>ESC</b> liberar</span>
+<div class="info" id="status">Comprobando los archivos CTX oficiales…</div></div>
+<button id="instructions">Entrar a la exploración · click para controlar la cámara</button>
+<div id="loader"><div class="eyebrow">MARS EVA NAVIGATOR</div><h2>Jezero · 60 km</h2><p id="loadText">Cargando elevaciones oficiales del mosaico regional CTX…</p></div>
+<script type="module" src="./region_world.mjs"></script>
+</body></html>
