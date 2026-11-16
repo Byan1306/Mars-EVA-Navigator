@@ -158,6 +158,24 @@ def world_gltf_utilities():
         raise HTTPException(404, 'Ejecuta npm install para añadir las utilidades glTF.')
     return FileResponse(path, media_type='text/javascript')
 
+@app.get('/vendor/loaders/DRACOLoader.js', include_in_schema=False)
+def world_draco_loader():
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'loaders' / 'DRACOLoader.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Instala Three.js para cargar el astronauta.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/vendor/draco/{filename}', include_in_schema=False)
+def world_draco_decoder(filename: str):
+    approved = {'draco_decoder.wasm', 'draco_wasm_wrapper.js', 'draco_decoder.js'}
+    if filename not in approved:
+        raise HTTPException(404, 'El recurso no está autorizado.')
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'libs' / 'draco' / filename
+    if not path.is_file():
+        raise HTTPException(404, 'Falta el decodificador local Draco.')
+    mime = 'application/wasm' if filename.endswith('.wasm') else 'text/javascript'
+    return FileResponse(path, media_type=mime)
+
 @app.get('/assets/astronaut_z2.glb', include_in_schema=False)
 def astronaut_z2_asset():
     path = BASE_DIR / 'assets' / 'astronaut_z2.glb'
