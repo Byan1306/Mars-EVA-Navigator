@@ -133,6 +133,13 @@ def world_three_vendor():
         raise HTTPException(404, 'Ejecuta npm install para instalar Three.js.')
     return FileResponse(path, media_type='text/javascript')
 
+@app.get('/vendor/three.core.js', include_in_schema=False)
+def world_three_core_vendor():
+    path = BASE_DIR / 'node_modules' / 'three' / 'build' / 'three.core.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para instalar Three.js.')
+    return FileResponse(path, media_type='text/javascript')
+
 @app.get('/jezero_ortho_meta.json', include_in_schema=False)
 def ortho_metadata():
     path = BASE_DIR / 'jezero_ortho_meta.json'
