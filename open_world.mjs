@@ -40,6 +40,7 @@ function failure(err) {
   $('retry').classList.remove('hidden');
   $('dataState').textContent='SIN DEM UTILIZABLE';
   $('enterWorld').classList.add('hidden');
+  document.body.dataset.worldState='error';
   document.exitPointerLock?.();
 }
 async function getData() {
@@ -330,6 +331,7 @@ async function init() {
     if(typeof src==='string'&&/^https:\/\/planetarymaps\.usgs\.gov\//.test(src))
       $('sourceLink').href=src;
     loaded=true;
+    document.body.dataset.worldState='ready';
     overlay.classList.add('hidden');
     setCamera('first');
     clock.start();
