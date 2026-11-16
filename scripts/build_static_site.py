@@ -24,6 +24,7 @@ PUBLIC_FILES = (
     "open_world.html",
     "open_world.css",
     "open_world.mjs",
+    "open_world_visuals.mjs",
     "open_world_core.js",
 )
 
@@ -50,6 +51,20 @@ def build(output: Path, dem: Path) -> None:
     if not three_core.is_file():
         raise FileNotFoundError("Three.js core module missing. Run npm install.")
     shutil.copy2(three_core, output / "vendor" / "three.core.js")
+    extras = ROOT / "node_modules" / "three" / "examples" / "jsm"
+    for relative in ("loaders/GLTFLoader.js", "utils/BufferGeometryUtils.js"):
+        source_mod = extras / relative
+        if not source_mod.is_file():
+            raise FileNotFoundError(f"Three.js addon not installed: {relative}")
+        out_file = output / "vendor" / relative
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_mod, out_file)
+    astronaut = ROOT / "assets" / "astronaut_z2.glb"
+    astronaut_meta = ROOT / "assets" / "astronaut_manifest.json"
+    if astronaut.is_file() and astronaut_meta.is_file():
+        (output / "assets").mkdir(exist_ok=True)
+        shutil.copy2(astronaut, output / "assets" / astronaut.name)
+        shutil.copy2(astronaut_meta, output / "assets" / astronaut_meta.name)
     # Optional USGS-registered CTX texture; never ship unverified arbitrary imagery.
     texture = ROOT / "jezero_ortho.jpg"
     texture_meta = ROOT / "jezero_ortho_meta.json"
