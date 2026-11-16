@@ -28,6 +28,7 @@ jobs:
           node --check curiosity_explorer.js
           node --check curiosity_360_renderer.js
           node --check open_world.mjs
+          node --check open_world_visuals.mjs
           node --check open_world_core.js
           node --test tests/open-world-core.test.cjs
           node --test tests/curiosity.test.cjs tests/curiosity-mission-control.test.cjs
