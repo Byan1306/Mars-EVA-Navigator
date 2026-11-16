@@ -748,6 +748,7 @@
     #evidence-panel a {color:#00d2ff;}
   </style>
   <link rel="stylesheet" href="./curiosity_explorer.css">
+  <link rel="stylesheet" href="./curiosity_pro.css">
 </head>
 <body>
 
@@ -1133,7 +1134,12 @@
           <span class="curiosity-kicker">NASA MSL • Gale Crater</span>
           <button id="curiosity-close" type="button">✕ Salir</button>
         </div>
-        <h2>Curiosity · el recorrido completo</h2>
+        <div class="curiosity-hero">
+          <div class="curiosity-hero-eyebrow">MARS EXPLORATION LAB / GALE CRATER</div>
+          <h2>CUR<span>IO</span>SITY</h2>
+          <p>14 años de exploración. Un terreno real. Cada posición publicada por NASA/JPL.</p>
+          <div class="curiosity-hero-credit">Datos cartográficos NASA Mars Trek · MRO HiRISE / CTX</div>
+        </div>
         <p>Explora el trayecto histórico registrado desde 2012. La línea completa procede de NASA/JPL-Caltech, compilada cronológicamente por azmth.space. Los sols intermedios son interpolados; los panoramas corresponden a sols documentados por NASA.</p>
         <div class="curiosity-stat-grid">
           <div class="curiosity-stat"><strong id="curiosity-point-count">—</strong><small>Vértices publicados</small></div>
@@ -1142,7 +1148,19 @@
           <div class="curiosity-stat"><strong id="curiosity-last-update">—</strong><small>Fecha de datos</small></div>
         </div>
         <div id="curiosity-data-status" role="status" aria-live="polite">Pulsa «Ruta Curiosity» para consultar la trayectoria.</div>
-        <div class="curiosity-card">
+        
+        <div class="curiosity-card" id="curiosity-layer-card">
+          <div class="curiosity-label-row"><span>01 / CARTOGRAFÍA ORBITAL</span><a href="https://trek.nasa.gov/mars/" target="_blank" rel="noopener">NASA MARS TREK ↗</a></div>
+          <h3>Relieve real · Gale Crater</h3>
+          <p>Capas oficiales de imágenes orbitales, con cambio de resolución y sin agrandar artificialmente el mosaico Viking.</p>
+          <div class="curiosity-layer-tabs" role="group" aria-label="Resolución del mapa marciano">
+            <button id="curiosity-layer-hirise" class="active" type="button" aria-pressed="true">HiRISE <small>Detalle</small></button>
+            <button id="curiosity-layer-ctx" type="button" aria-pressed="false">CTX <small>Regional</small></button>
+            <button id="curiosity-layer-viking" type="button" aria-pressed="false">Viking <small>Global</small></button>
+          </div>
+          <div id="curiosity-layer-status" role="status">HiRISE: imagen orbital de alta resolución; el detalle varía por cobertura real de la misión.</div>
+        </div>
+<div class="curiosity-card">
           <h3>Máquina del tiempo marciana</h3>
           <label for="curiosity-sol-slider"><strong id="curiosity-sol-label">SOL —</strong> · <span id="curiosity-pos-label">Coordenadas no cargadas</span></label>
           <input id="curiosity-sol-slider" type="range" min="0" max="5000" value="0" step="1">
@@ -1168,7 +1186,37 @@
           <p>Selecciona un panorama para centrar su sol en el mapa y explorar el mosaico horizontal. No existe una fotografía 360° para todos los metros o cada sol del recorrido.</p>
           <div id="curiosity-panorama-list"></div>
         </div>
-        <div class="curiosity-card">
+        
+        <div class="curiosity-card" id="curiosity-archive">
+          <div class="curiosity-label-row"><span>03 / ARCHIVO FOTOGRÁFICO</span><span>NASA / JPL-CALTECH</span></div>
+          <h3>Fotografías originales del sol</h3>
+          <p>Busca imágenes individuales de las cámaras del rover, no solamente los panoramas publicados. Una foto suelta no se convierte automáticamente en una captura 360°.</p>
+          <div class="curiosity-actions" style="align-items:center">
+            <label for="curiosity-camera-select">Cámara</label>
+            <select id="curiosity-camera-select" aria-label="Seleccionar cámara Curiosity">
+              <option value="all">Todas</option>
+              <option value="NAV_LEFT_A">Navcam izquierda</option>
+              <option value="NAV_RIGHT_A">Navcam derecha</option>
+              <option value="MAST_LEFT">Mastcam izquierda</option>
+              <option value="MAST_RIGHT">Mastcam derecha</option>
+              <option value="MAHLI">MAHLI</option>
+              <option value="FHAZ_LEFT_A">Hazcam frontal</option>
+            </select>
+            <button id="curiosity-load-photos" type="button">Cargar fotos reales</button>
+          </div>
+          <div id="curiosity-photo-feed-status" role="status" aria-live="polite">Selecciona una fecha marciana y pulsa «Cargar fotos reales».</div>
+          <div id="curiosity-raw-grid" class="curiosity-raw-grid" aria-label="Galería de fotos NASA del sol"></div>
+          <div class="curiosity-actions curiosity-pages">
+            <button id="curiosity-photos-prev" type="button" disabled>← Anteriores</button>
+            <span id="curiosity-photos-page" aria-live="polite">Página 1</span>
+            <button id="curiosity-photos-next" type="button" disabled>Siguientes →</button>
+          </div>
+          <div class="curiosity-panel-links">
+            <a href="https://mars.nasa.gov/msl/multimedia/raw-images/" target="_blank" rel="noopener">Archivo NASA completo ↗</a>
+            <a href="https://science.nasa.gov/mission/msl-curiosity/location-map/" target="_blank" rel="noopener">Comparar con mapa NASA ↗</a>
+          </div>
+        </div>
+<div class="curiosity-card">
           <h3>Procedencia y alcance</h3>
           <p id="curiosity-source-description">NASA/JPL-Caltech, compilación azmth.space CC BY 4.0.</p>
           <p>El mapa de fondo es el mosaico Viking de NASA Mars Trek (232 m); no debe confundirse su detalle visual con la precisión de la geometría de la ruta. Ni este recorrido histórico ni sus fotos certifican una ruta EVA segura.</p>
@@ -1181,8 +1229,10 @@
         </div>
       </aside>
       <div id="curiosity-map-wrap">
+        <div class="curiosity-map-topline"><span><b class="curiosity-live-dot"></b> MSL / CURIOSITY</span><span>MRO ORBITAL IMAGERY · NASA/JPL</span></div>
         <div id="curiosity-map" role="application" aria-label="Mapa histórico del recorrido de Curiosity"></div>
         <div id="curiosity-map-loading" role="status">Cargando recorrido documentado…</div>
+        <div class="curiosity-map-scale-legend"><span class="curiosity-legend-line"></span> RECORRIDO PUBLICADO <span class="curiosity-legend-pin"></span> PANORAMA NASA</div>
         <div id="curiosity-map-caption">La ruta se cargará desde registros externos verificables; no se dibuja una línea artificial.</div>
         <section id="curiosity-photo-dialog" class="curiosity-photo-dialog" hidden role="dialog" aria-label="Visor panorámico NASA Curiosity" aria-modal="true">
           <div class="curiosity-photo-toolbar">
