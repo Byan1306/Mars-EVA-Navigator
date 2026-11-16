@@ -3,6 +3,7 @@
  * reconstructions, NOT observed hazards or an instrument dataset.
  */
 import {GLTFLoader} from './vendor/loaders/GLTFLoader.js';
+import {DRACOLoader} from './vendor/loaders/DRACOLoader.js';
 
 export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   const clamp=(a,b,c)=>Math.min(c,Math.max(b,a));
@@ -108,6 +109,10 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   // represent a real Mars EVA suit currently deployed on Mars.
   let modelRoot=null,modelMixer=null,modelState='recreado 3D';
   const loader=new GLTFLoader();
+  const draco=new DRACOLoader();
+  draco.setDecoderPath('./vendor/draco/');
+  draco.setWorkerLimit(2);
+  loader.setDRACOLoader(draco);
   fetch('./assets/astronaut_manifest.json',{cache:'no-store'})
     .then(r=>r.ok?r.json():null)
     .then(async manifest=>{
@@ -328,7 +333,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
     scene.remove(body,shadow,sky,warmLight,fillLight,large);
     rockGeo.dispose();large.material.dispose();
     shadow.geometry.dispose();shadow.material.dispose();shadowTex.dispose();
-    sky.geometry.dispose();sky.material.dispose();grains.dispose();
+    sky.geometry.dispose();sky.material.dispose();grains.dispose();draco.dispose();
   }
   document.body.dataset.astronaut='procedural';
   return {avatar:body,enhanceMaterial,update,setQuality,dispose,
