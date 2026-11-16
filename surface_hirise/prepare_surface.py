@@ -156,6 +156,8 @@ def generate(out,center_lon,center_lat,ortho_enabled=True,tiles_per_side=4):
    coverage=float(good.mean())
    if coverage<VALID_MIN:raise ValueError(f"HiRISE DEM coverage only {coverage:.2%}; aborting")
    trans=src.window_transform(window)
+   if abs(trans.b)>1e-9 or abs(trans.d)>1e-9:
+    raise ValueError("Rotated raster is not supported; reproject scientifically first.")
    mid=grid//2
    ref=float(heights[mid,mid])
    if not np.isfinite(ref):raise ValueError("Invalid center reference elevation")
@@ -201,6 +203,13 @@ def generate(out,center_lon,center_lat,ortho_enabled=True,tiles_per_side=4):
      ortho=None;image=None
    for folder in ("assets/tiles","assets/textures","assets/masks","reports"):
     (out/folder).mkdir(parents=True,exist_ok=True)
+   # Persist the exact observed height samples for later collision/route code.
+   # No heights are invented: missing cells are masked in a separate binary.
+   height_file=out/"assets"/"height_1m.f32"
+   mask_file=out/"assets"/"mask_1m.bin"
+   out_heights=np.where(good,heights,np.nan).astype("<f4")
+   out_heights.tofile(height_file)
+   good.astype("uint8").tofile(mask_file)
    rendered=[]
    for ir in range(tiles_per_side):
     for ic in range(tiles_per_side):
@@ -242,7 +251,14 @@ def generate(out,center_lon,center_lat,ortho_enabled=True,tiles_per_side=4):
     "reference_definition":"DEM center sample, physical heights minus this number",
     "local_coordinate_system":"X east; Y up (relative to center DEM elevation); Z south",
     "east_scale_factor":angle,
-    "geometry_scale_y":1.0,"no_data_handling":"No synthetic heights. NoData faces omitted even in coarse LOD.",
+    "geometry_scale_y":1.0,
+    "height_file":{"path":"assets/height_1m.f32","sha256":sha(height_file),
+       "row_order":"North to South","samples_per_side":grid+1,"dtype":"float32 little endian absolute m"},
+    "mask_file":{"path":"assets/mask_1m.bin","sha256":sha(mask_file),
+       "dtype":"uint8, one=measured"},
+    "local_sample_spacing_m":[x_native*angle,y_native],
+    "local_sample_center_origin_m":[(0-grid//2)*x_native*angle,(0-grid//2)*y_native],
+    "no_data_handling":"No synthetic heights. NoData faces omitted even in coarse LOD.",
     "vertical_source_uncertainty":"Not evaluated beyond native USGS metadata; do not claim certified precision.",
     "photographic_texture":{"source":ortho_url if image is not None else None,
       "metadata":SOURCE_PAGES["ortho"],"available":image is not None,
