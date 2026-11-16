@@ -140,6 +140,38 @@ def world_three_core_vendor():
         raise HTTPException(404, 'Ejecuta npm install para instalar Three.js.')
     return FileResponse(path, media_type='text/javascript')
 
+@app.get('/open_world_visuals.mjs', include_in_schema=False)
+def world_cinematic_code():
+    return FileResponse(BASE_DIR / 'open_world_visuals.mjs', media_type='text/javascript')
+
+@app.get('/vendor/loaders/GLTFLoader.js', include_in_schema=False)
+def world_gltf_loader():
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'loaders' / 'GLTFLoader.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para añadir el cargador glTF.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/vendor/utils/BufferGeometryUtils.js', include_in_schema=False)
+def world_gltf_utilities():
+    path = BASE_DIR / 'node_modules' / 'three' / 'examples' / 'jsm' / 'utils' / 'BufferGeometryUtils.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta npm install para añadir las utilidades glTF.')
+    return FileResponse(path, media_type='text/javascript')
+
+@app.get('/assets/astronaut_z2.glb', include_in_schema=False)
+def astronaut_z2_asset():
+    path = BASE_DIR / 'assets' / 'astronaut_z2.glb'
+    if not path.is_file():
+        raise HTTPException(404, 'Modelo NASA Z-2 opcional no descargado.')
+    return FileResponse(path, media_type='model/gltf-binary')
+
+@app.get('/assets/astronaut_manifest.json', include_in_schema=False)
+def astronaut_z2_provenance():
+    path = BASE_DIR / 'assets' / 'astronaut_manifest.json'
+    if not path.is_file():
+        raise HTTPException(404, 'Manifiesto NASA Z-2 no descargado.')
+    return FileResponse(path, media_type='application/json')
+
 @app.get('/jezero_ortho_meta.json', include_in_schema=False)
 def ortho_metadata():
     path = BASE_DIR / 'jezero_ortho_meta.json'
