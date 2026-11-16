@@ -79,7 +79,7 @@ class Cylindrical360 {
   load(url){
     this.disable();
     const request=++this.request;
-    if(!/^https:\/\//.test(url))return Promise.reject(Error('La imagen no utiliza HTTPS.'));
+    if(!/^https:\/\//.test(url)&&!/^blob:/.test(url))return Promise.reject(Error('Solo se aceptan enlaces HTTPS o imágenes locales seleccionadas por el usuario.'));
     return new Promise((resolve,reject)=>{
       const img=new Image();img.crossOrigin='anonymous';
       img.onload=()=>{
