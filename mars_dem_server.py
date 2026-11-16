@@ -169,7 +169,8 @@ def estado():
                 'science_status': 'DEM georreferenciado validado; no certifica seguridad EVA',
             }
     except HTTPException as exc:
-        return {'status': 'sin_dem', 'tif_detectado': None, 'detail': exc.detail}
+        status = 'sin_dem' if exc.status_code == 404 else 'dem_invalido'
+        return {'status': status, 'tif_detectado': None, 'detail': exc.detail}
     except (rasterio.errors.RasterioError, ValueError, OSError) as exc:
         return {'status': 'dem_invalido', 'tif_detectado': None,
                 'detail': 'El archivo encontrado no supera la validación del DEM.'}
