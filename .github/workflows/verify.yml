@@ -21,10 +21,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install pinned 3D runtime locally (not from CDN)
+        run: npm install --no-audit --no-fund
       - name: Validate Curiosity JavaScript
         run: |
           node --check curiosity_explorer.js
           node --check curiosity_360_renderer.js
+          node --check open_world.mjs
+          node --check open_world_core.js
+          node --test tests/open-world-core.test.cjs
           node --test tests/curiosity.test.cjs tests/curiosity-mission-control.test.cjs
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
