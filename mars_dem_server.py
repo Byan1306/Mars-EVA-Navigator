@@ -106,6 +106,23 @@ def pagina():
     return FileResponse(path, media_type='text/html')
 
 
+# Serve only explicit, public app assets. Do not expose the local DEM, database,
+# credentials or private files with a generic static-directory mount.
+@app.get('/curiosity_explorer.js', include_in_schema=False)
+def curiosity_javascript():
+    path = BASE_DIR / 'curiosity_explorer.js'
+    if not path.is_file():
+        raise HTTPException(404, 'Falta curiosity_explorer.js.')
+    return FileResponse(path, media_type='application/javascript')
+
+
+@app.get('/curiosity_explorer.css', include_in_schema=False)
+def curiosity_styles():
+    path = BASE_DIR / 'curiosity_explorer.css'
+    if not path.is_file():
+        raise HTTPException(404, 'Falta curiosity_explorer.css.')
+    return FileResponse(path, media_type='text/css')
+
 @app.get('/api/status')
 def estado():
     try:
