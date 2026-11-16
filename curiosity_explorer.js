@@ -438,6 +438,78 @@
     document.body.appendChild(anchor);anchor.click();anchor.remove();
     setTimeout(function(){URL.revokeObjectURL(url);},2000);
   }
+
+  // Raw NASA photos are individual images, not automatically omnidirectional.
+  function showRawPhoto(photo) {
+    stopPlayback();
+    state.activePano={raw:true,sol:photo.sol,source:photo.url,url:photo.url};
+    document.querySelectorAll('.curiosity-panorama-item').forEach(function(b){b.classList.remove('active');});
+    text('curiosity-photo-title',(photo.camera||'Cámara NASA')+' · Sol '+(photo.sol??'?'));
+    text('curiosity-photo-caption','Fotografía individual original NASA/JPL-Caltech, sin proyección 360° ni coordenadas de cámara verificadas. Para construir un panorama correcto se requieren múltiples tomas solapadas del mismo punto e información de calibración.');
+    id('curiosity-photo-source').href=photo.url;
+    id('curiosity-photo-dialog').hidden=false;
+    state.panRatio=.5;state.zoom=1;id('curiosity-zoom').value='1';
+    const error=id('curiosity-photo-error');
+    error.hidden=false;error.textContent='Cargando fotografía original NASA…';
+    const img=id('curiosity-photo-image');
+    img.onload=function(){error.hidden=true;positionPhoto();};
+    img.onerror=function(){error.hidden=false;error.textContent='Esta imagen no se pudo cargar; pulsa «Abrir original NASA».';};
+    img.src=photo.url;
+    if(state.pano3d)state.pano3d.disable();
+  }
+  function renderRawPhotos() {
+    const grid=id('curiosity-raw-grid');
+    grid.textContent='';
+    for(const photo of state.rawPhotos) {
+      const button=document.createElement('button');
+      button.className='curiosity-raw-card';
+      button.type='button';
+      button.title='Abrir foto NASA; imagen individual, no panorámica 360°';
+      const image=document.createElement('img');
+      image.loading='lazy'; image.decoding='async'; image.src=photo.url;
+      image.alt=(photo.camera||'Cámara NASA')+' • Sol '+(photo.sol??'?');
+      image.onerror=function(){image.style.display='none';};
+      const label=document.createElement('span');
+      const camera=document.createElement('strong');camera.textContent=photo.camera||'NASA Curiosity';
+      const sol=document.createElement('small');sol.textContent=' · Sol '+(photo.sol??'?')+' · imagen individual';
+      label.append(camera,sol);button.append(image,label);
+      button.addEventListener('click',function(){showRawPhoto(photo);});
+      grid.append(button);
+    }
+  }
+  async function loadRawPhotos(page=0) {
+    if(!state.track){text('curiosity-photo-feed-status','Primero carga la trayectoria para identificar un sol.');return;}
+    const sol=Math.round(state.selectedSol), camera=id('curiosity-camera-select').value;
+    const request=++state.rawRequest;
+    state.rawPage=page;state.rawSol=sol;
+    id('curiosity-raw-grid').textContent='';
+    text('curiosity-photo-feed-status','Consultando archivo NASA • Sol '+sol+' • página '+(page+1)+'…');
+    id('curiosity-photos-prev').disabled=true;
+    id('curiosity-photos-next').disabled=true;
+    try{
+      const response=await fetchJSON(curiosityPhotosURL(sol,camera,page),18000);
+      if(request!==state.rawRequest)return;
+      const normalized=normalizeRawPhotos(response);
+      state.rawPhotos=normalized.photos;
+      renderRawPhotos();
+      text('curiosity-photo-feed-status',normalized.photos.length
+        ? normalized.photos.length+' imágenes originales recibidas de NASA para el sol '+sol+
+          (normalized.total!==null?' · '+formatNum(normalized.total)+' resultados disponibles':'')
+        : 'Sin imágenes accesibles con esos filtros. Abre el archivo NASA para ampliar la búsqueda.');
+      text('curiosity-photos-page','Página '+(page+1));
+      id('curiosity-photos-prev').disabled=page===0;
+      id('curiosity-photos-next').disabled=normalized.total!==null
+        ? (page+1)*24>=normalized.total
+        : normalized.photos.length<24;
+    }catch(e){
+      if(request!==state.rawRequest)return;
+      state.rawPhotos=[];
+      text('curiosity-photo-feed-status','No fue posible consultar el API de NASA ('+(e.message||e)+'). Usa «Archivo NASA completo» para este sol.');
+      id('curiosity-photos-prev').disabled=page===0;
+      id('curiosity-photos-next').disabled=true;
+    }
+  }
+
   function renderPanoList() {
     const list=id('curiosity-panorama-list');
     list.textContent='';
@@ -472,6 +544,7 @@
     id('curiosity-photo-image').onload=null;
     state.activePano=null;
     state.dragging=false;
+    if(state.pano3d)state.pano3d.disable();
     document.querySelectorAll('.curiosity-panorama-item').forEach(function(b){b.classList.remove('active');});
   }
   function openPanorama(panoId) {
@@ -525,6 +598,13 @@
       id(name).addEventListener('click',function(){if (state.overlayOpen) closeExplorer();});
     });
     id('curiosity-reload').addEventListener('click',loadTrail);
+    for(const mode of ['hirise','ctx','viking']){
+      id('curiosity-layer-'+mode).addEventListener('click',function(){updateMapMode(mode);});
+    }
+    id('curiosity-load-photos').addEventListener('click',function(){loadRawPhotos(0);});
+    id('curiosity-camera-select').addEventListener('change',function(){if(state.rawSol!==null)loadRawPhotos(0);});
+    id('curiosity-photos-prev').addEventListener('click',function(){if(state.rawPage>0)loadRawPhotos(state.rawPage-1);});
+    id('curiosity-photos-next').addEventListener('click',function(){loadRawPhotos(state.rawPage+1);});
     id('curiosity-fit').addEventListener('click',function(){
       if (state.map && state.track) state.map.fitBounds(L.latLngBounds(state.track.coords).pad(.08),{padding:[18,18],maxZoom:14});
     });
