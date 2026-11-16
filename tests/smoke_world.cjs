@@ -62,8 +62,15 @@ const launchOptions={channel:'chrome',headless:true,args:[
    if(!report.cameraVerified)throw Error('Flight camera button did not change state.');
    report.coords={lonAfter,latAfter};
    report.success=true;
-   await page.screenshot({path:path.join(results,'jezero-world-chrome.png'),fullPage:true});
-   report.screenshot='jezero-world-chrome.png';
+   await page.screenshot({path:path.join(results,'jezero-world-ground.png'),fullPage:true});
+   await page.locator('#cameraOrbit').click();
+   await page.locator('#world').hover();
+   await page.mouse.wheel(0,1400);
+   await page.waitForTimeout(850);
+   await page.screenshot({path:path.join(results,'jezero-world-oblique.png'),fullPage:true});
+   report.screenshot='jezero-world-oblique.png';
+   report.secondaryScreenshot='jezero-world-ground.png';
+   report.textureLabel=await page.locator('#evidence').textContent();
  }catch(err) {
    report.error=String(err.stack||err);
    // A screenshot can show whether this is a visual issue, missing data or GPU failure.
