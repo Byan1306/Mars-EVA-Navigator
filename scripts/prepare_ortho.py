@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 from urllib.request import Request, urlopen
 
 import numpy as np
@@ -21,13 +22,14 @@ from rasterio.vrt import WarpedVRT
 from rasterio.enums import Resampling
 from pyproj import CRS
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 from mars_dem_server import MARS_LONLAT_CRS
 try:
     from scripts.verify_static_dem import verify
 except ImportError:
     from verify_static_dem import verify
 
-ROOT = Path(__file__).resolve().parents[1]
 BASE_URL = "https://planetarymaps.usgs.gov/mosaic/mars2020_trn/CTX/"
 PRODUCT = "JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0.tif"
 SOURCE_URL = BASE_URL + PRODUCT
