@@ -102,6 +102,8 @@ function animate(t) {
  moveCamera(dt);
  renderer.render(scene,camera);
  document.body.dataset.triangles=String(renderer.info.render.triangles);
+ document.body.dataset.cameraX=String(camera.position.x);
+ document.body.dataset.cameraZ=String(camera.position.z);
  if(surface&&t%300<16){
   $('metrics').textContent='DEM: '+surface.manifest.source_dem_native_pixel_spacing_projected_m.join(' × ')+
     ' m originales · '+surface.manifest.tiles.length+' tiles · '+
