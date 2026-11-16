@@ -61,6 +61,19 @@ const launchOptions={channel:'chrome',headless:true,args:[
    report.cameraVerified=(await page.locator('#viewMode').textContent()).includes('VUELO');
    if(!report.cameraVerified)throw Error('Flight camera button did not change state.');
    report.coords={lonAfter,latAfter};
+   await page.locator('#cameraThird').click();
+   await page.waitForTimeout(2000);
+   if(fs.existsSync(path.join(root,'assets','astronaut_z2.glb'))) {
+     try {
+       await page.waitForFunction(()=>document.body.dataset.astronaut==='nasa-z2',
+         null,{timeout:20000});
+     } catch {
+       throw Error('Official NASA astronaut exists but glTF did not load into the WebGL scene.');
+     }
+   }
+   report.astronautModel=await page.locator('body').getAttribute('data-astronaut');
+   await page.screenshot({path:path.join(results,'jezero-world-astronaut.png'),fullPage:true});
+   report.astronautScreenshot='jezero-world-astronaut.png';
    report.success=true;
    await page.screenshot({path:path.join(results,'jezero-world-ground.png'),fullPage:true});
    await page.locator('#cameraOrbit').click();
