@@ -3,6 +3,7 @@
  * sky, illumination and hypsometric colors are illustrative, never imagery.
  */
 import * as THREE from './vendor/three.module.js';
+import {createCinematicLayer} from './open_world_visuals.mjs';
 import './open_world_core.js';
 
 const C = globalThis.MarsTerrainCore;
@@ -20,7 +21,7 @@ const QUALITY = {
   high: {maxDistance:39000,pixelRatio:2,near:6500,middle:18000,shadows:true}
 };
 let d, renderer, scene, camera, terrainMaterial, lastChunkUpdate=0, lastHud=0;
-let avatar, minimapBase, textureMode='analítico', quality='balanced', mode='first';
+let avatar, visuals, minimapBase, textureMode='analítico', quality='balanced', mode='first';
 let yaw=0.3,pitch=-0.08,orbitDistance=130,verticalSpeed=0,grounded=true;
 let pointerEnabled=false,player={x:0,y:0,z:0};
 let loaded=false, ticker=null;
@@ -114,26 +115,8 @@ function createWorld() {
   scene.background=new THREE.Color(0x786568);
   scene.fog=new THREE.Fog(0x786568,15000,56000);
   camera=new THREE.PerspectiveCamera(72,1,.15,85000);
-  scene.add(new THREE.HemisphereLight(0xffe8d8,0x503f3a,2.1));
-  const sun=new THREE.DirectionalLight(0xffe1ba,3.0);
-  sun.position.set(-11000,18000,7500);
-  sun.castShadow=QUALITY[quality].shadows;
-  sun.shadow.mapSize.set(2048,2048);
-  sun.shadow.camera.left=-5200;sun.shadow.camera.right=5200;
-  sun.shadow.camera.top=5200;sun.shadow.camera.bottom=-5200;
-  scene.add(sun);
-  const bodyMaterial=new THREE.MeshStandardMaterial({color:0xd6e1e0,roughness:.78});
-  avatar=new THREE.Group();
-  const suit=new THREE.Mesh(new THREE.CapsuleGeometry(.44,1.1,4,8),bodyMaterial);
-  suit.position.y=1.06;avatar.add(suit);
-  const helmet=new THREE.Mesh(new THREE.SphereGeometry(.35,12,10),
-    new THREE.MeshStandardMaterial({color:0xf5f0e5,roughness:.45}));
-  helmet.position.y=1.99;avatar.add(helmet);
-  const visor=new THREE.Mesh(new THREE.SphereGeometry(.22,12,9),
-    new THREE.MeshStandardMaterial({color:0x31444e,metalness:.35,roughness:.25}));
-  visor.position.set(0,1.99,-.24);avatar.add(visor);
-  avatar.traverse(obj=>{if(obj.isMesh)obj.castShadow=true});
-  scene.add(avatar);
+  visuals=createCinematicLayer({THREE,scene,core:C,dem:d,renderer,notify:notice});
+  avatar=visuals.avatar;
   configureQuality();
   window.addEventListener('resize',resize);
   resize();
@@ -151,6 +134,7 @@ function configureQuality() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,q.pixelRatio));
   renderer.shadowMap.enabled=q.shadows;
   if(d) refreshTiles(true);
+  visuals?.setQuality(quality);
   resize();
 }
 function setCamera(value) {
@@ -237,10 +221,10 @@ function updateCamera() {
     camera.up.set(0,1,0);
     camera.lookAt(camera.position.clone().add(forward));
   } else if(mode==='third') {
-    const distance=11;
+    const distance=6.7;
     let camX=player.x-Math.sin(yaw)*distance;
     let camZ=player.z+Math.cos(yaw)*distance;
-    let camY=player.y+6+Math.sin(-pitch)*7;
+    let camY=player.y+2.9+Math.sin(-pitch)*3.4;
     const h=C.sample(d,camX,camZ);
     if(h!==null) camY=Math.max(camY,h-d.ref+2.5);
     camera.position.set(camX,camY,camZ);
@@ -303,6 +287,10 @@ function frame() {
   const now=performance.now();
   if(now-lastChunkUpdate>700){refreshTiles();lastChunkUpdate=now;}
   if(now-lastHud>140){updateHud();lastHud=now;}
+  visuals?.update({
+    dt,player:{...player,yaw:-yaw},camera,mode,quality,
+    moving:['w','s','a','d'].some(key=>keys.has(key))
+  });
   renderer.render(scene,camera);
   document.body.dataset.visibleTriangles=String(renderer.info.render.triangles);
 }
@@ -319,6 +307,7 @@ async function init() {
       color:texture?0xfac6a8:0xffffff,map:texture,vertexColors:!texture,
       roughness:1,metalness:0,side:THREE.FrontSide
     });
+    visuals.enhanceMaterial(terrainMaterial);
     const start=C.findStart(d);
     player={x:start.x,y:start.height-d.ref,z:start.z};
     for(let r=0;r<d.h-1;r+=32)for(let c=0;c<d.w-1;c+=32)
@@ -332,6 +321,9 @@ async function init() {
       'USGS CTX con SHA-256 declarado. ':'DEM cargado; procedencia no verificada localmente. ')+
       'Muestreo original: '+(d.raw.source_resolution_m_approx?.map(x=>Math.round(x)+' m').join(' × ')||'no informado')+
       '. Apariencia: '+textureMode+'. La interpolación NO añade detalle.';
+    $('visualDetail')?.addEventListener('change',event=>{
+      notice(event.target.checked?'Ambientación ilustrativa activada.':'Ambientación ilustrativa oculta.');
+    });
     if(typeof src==='string'&&/^https:\/\/planetarymaps\.usgs\.gov\//.test(src))
       $('sourceLink').href=src;
     loaded=true;
@@ -395,7 +387,7 @@ function initInput() {
   });
   window.addEventListener('beforeunload',()=>{
     for(const tile of tiles)tile.mesh?.geometry.dispose();
-    terrainMaterial?.map?.dispose();terrainMaterial?.dispose();renderer?.dispose();
+    terrainMaterial?.map?.dispose();terrainMaterial?.dispose();visuals?.dispose();renderer?.dispose();
   });
 }
 initInput();
