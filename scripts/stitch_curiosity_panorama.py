@@ -38,6 +38,11 @@ def resize_image(image, cv2, max_side: int):
                       interpolation=cv2.INTER_AREA)
 
 
+def sha256_file(path: Path) -> str:
+    with path.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
 def make_manifest(source_paths: list[Path], output: Path, sol: int, shape: tuple):
     return {
         "kind": "experimental-photographic-stitch",
@@ -60,7 +65,7 @@ def make_manifest(source_paths: list[Path], output: Path, sol: int, shape: tuple
         "sources": [
             {
                 "filename": file.name,
-                "sha256": hashlib.file_digest(file.open("rb"), "sha256").hexdigest(),
+                "sha256": sha256_file(file),
                 "official_source_url": "Add the original NASA URL and camera ID here before publication",
             }
             for file in source_paths
