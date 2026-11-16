@@ -82,3 +82,10 @@ test('Immersive navigation only steps between documented NASA panorama stations'
   assert.match(css,/\.curiosity-station-nav/);
   assert.match(js,/e\.key==='ArrowLeft'/);
 });
+
+test('Scientific route exports preserve USGS source identity and desktop navigation tabs stay compact',()=>{
+  const html=fs.readFileSync(path.join(root,'mars_eva_navigator_guia_de_supervivencia_interplanetaria_nasa_space_apps_2026.html'),'utf8');
+  assert.match(html,/dem_provenance: APP\.tifDem/);
+  assert.match(html,/sourceSHA256/);
+  assert.match(html,/\.section-nav button\.mini-btn \{ width:auto/);
+});
