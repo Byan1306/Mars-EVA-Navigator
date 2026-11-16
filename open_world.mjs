@@ -67,7 +67,7 @@ async function getRegisteredOrtho() {
     const image=await new THREE.TextureLoader().loadAsync('./jezero_ortho.jpg');
     image.colorSpace=THREE.SRGBColorSpace;
     image.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-    textureMode='ortofoto CTX USGS (~6 m/píxel)';
+    textureMode='ortofoto CTX USGS (~6 m/píxel originales; grises colorizados para visualización)';
     return image;
   } catch { return null; }
 }
@@ -163,7 +163,10 @@ function setCamera(value) {
   mode=value;
   if(mode==='fly')player.y+=3;
   if(mode==='top')orbitDistance=Math.max(650,orbitDistance);
-  if(mode==='orbit')orbitDistance=clamp(orbitDistance,60,2200);
+  if(mode==='orbit'){
+    orbitDistance=clamp(Math.max(orbitDistance,450),60,2200);
+    if(pitch>-.35)pitch=-.55;
+  }
   cameraModes.forEach(name=>{
     const id={first:'cameraFirst',third:'cameraThird',fly:'cameraFly',
       orbit:'cameraOrbit',top:'cameraTop'}[name];
@@ -313,7 +316,7 @@ async function init() {
     createWorld();
     const texture=await getRegisteredOrtho();
     terrainMaterial=new THREE.MeshStandardMaterial({
-      color:0xffffff,map:texture,vertexColors:!texture,
+      color:texture?0xfac6a8:0xffffff,map:texture,vertexColors:!texture,
       roughness:1,metalness:0,side:THREE.FrontSide
     });
     const start=C.findStart(d);
