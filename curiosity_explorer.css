@@ -1,0 +1,87 @@
+
+/* Curiosity traverse explorer. Independent from the EVA route planner. */
+.workspace { position: relative; }
+#curiosity-explorer {
+  position: absolute; inset: 0; z-index: 1250;
+  display: flex; min-height: 0;
+  background: #060b13; color: #eaf1ff;
+  border-top: 1px solid #334b6f;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+#curiosity-explorer[hidden], #curiosity-photo-dialog[hidden] { display: none !important; }
+#curiosity-explorer * { box-sizing: border-box; }
+#curiosity-panel {
+  width: 340px; max-width: 44%; min-width: 280px; flex: 0 0 auto;
+  background: #0c1525; border-right: 1px solid #324d70;
+  overflow: auto; padding: 15px; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 13px;
+}
+#curiosity-panel h2 { font-size: 19px; line-height: 1.3; margin: 0; color: #fff; }
+#curiosity-panel h3 { font-size: 14px; margin: 6px 0; color: #fff; }
+#curiosity-panel p { font-size: 12px; line-height: 1.5; color: #aebfda; }
+.curiosity-kicker { color: #ffcf90; font: 700 10px/1.4 Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.curiosity-badge { border: 1px solid #aa7135; border-radius: 6px; padding: 5px 8px; font-size: 11px; color: #ffd59c; }
+.curiosity-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.curiosity-actions button, #curiosity-explorer button, #curiosity-explorer select,
+#curiosity-explorer input[type=number], #curiosity-explorer input[type=range] { font: inherit; }
+#curiosity-explorer button {
+  border: 1px solid #416086; background: #142743; color: #eaf3ff;
+  border-radius: 7px; padding: 8px 10px; cursor: pointer; font-size: 12px;
+}
+#curiosity-explorer button:hover { background: #22416b; }
+#curiosity-explorer button:focus-visible, #curiosity-explorer a:focus-visible, #curiosity-explorer input:focus-visible {
+  outline: 2px solid #fbbf24; outline-offset: 2px;
+}
+#curiosity-explorer button[disabled] { opacity: .45; cursor: not-allowed; }
+.curiosity-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.curiosity-stat { border: 1px solid #29425f; border-radius: 8px; background: #101e32; padding: 9px; }
+.curiosity-stat strong { display: block; font: 700 16px Consolas, monospace; color: #ffd38b; margin-bottom: 3px; }
+.curiosity-stat small { color: #a9bbd9; font-size: 10px; }
+.curiosity-card { border: 1px solid #27425f; border-radius: 8px; padding: 10px; background: #0e1d30; }
+.curiosity-card label { font-size: 11px; color: #b7cae7; }
+.curiosity-card input[type=range] { width: 100%; accent-color: #fb923c; margin: 9px 0 3px; }
+.curiosity-card input[type=number] { width: 95px; background: #091323; color: #fff; border: 1px solid #44648e; padding: 6px; border-radius: 5px; }
+#curiosity-year-note, #curiosity-data-status { min-height: 1.5em; font-size: 11px; }
+#curiosity-data-status[role=status] { overflow-wrap: anywhere; }
+#curiosity-years { display: flex; justify-content: space-between; color: #718aa8; font-size: 10px; }
+#curiosity-map-wrap { position: relative; flex: 1 1 auto; min-width: 0; background: #171721; }
+#curiosity-map { position: absolute; inset: 0; width: 100%; height: 100%; }
+#curiosity-map .leaflet-popup-content-wrapper { background: #101e31; color: #fff; }
+#curiosity-map .leaflet-popup-tip { background: #101e31; }
+#curiosity-map .leaflet-popup-content { font-size: 12px; line-height: 1.5; }
+#curiosity-map .leaflet-popup-content a { color: #ffd38b; }
+#curiosity-map-caption {
+  position:absolute; bottom:25px; left:10px; right:10px; z-index:850; pointer-events:none;
+  padding: 8px 10px; border: 1px solid #45617c; background: rgba(4,10,21,.92);
+  font-size: 11px; color: #d9e7f6; border-radius: 7px;
+}
+#curiosity-map-loading { position: absolute; z-index: 900; left: 50%; top: 50%; transform: translate(-50%,-50%); background: #0c1525; border: 1px solid #416086; border-radius: 9px; padding: 16px; color: #e2e8f0; }
+#curiosity-panorama-list { display: flex; flex-direction: column; gap: 7px; }
+.curiosity-panorama-item { display:flex; gap:8px; align-items:center; text-align: left; width:100%; padding: 7px !important; }
+.curiosity-panorama-item.active { border-color: #ffb65c !important; background: #382a20 !important; }
+.curiosity-panorama-item strong { display:block; font-size: 12px; }
+.curiosity-panorama-item small { display:block; font-size:10px; color: #b0c6dc; margin-top:3px; }
+.curiosity-panel-links { display: flex; flex-wrap:wrap; gap:10px; }
+.curiosity-panel-links a { color: #8fc5ff; font-size: 11px; overflow-wrap:anywhere; }
+.curiosity-photo-dialog {
+  position:absolute; inset: 0; background:#03060a; z-index: 1500;
+  display: flex; flex-direction: column;
+}
+.curiosity-photo-toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:center; padding:9px; background:#091527; border-bottom:1px solid #2b4768; }
+.curiosity-photo-toolbar strong { font-size: 13px; color:#fff; }
+.curiosity-photo-toolbar a { font-size: 12px; color: #9bd1ff; }
+#curiosity-photo-window { flex:1; min-height:0; overflow:hidden; position:relative; cursor:grab; background:linear-gradient(#0f1521,#17120f); touch-action:pan-y; }
+#curiosity-photo-window:active {cursor:grabbing}
+#curiosity-photo-image { position:absolute; height:100%; max-width:none; width:auto; min-width:100%; left:50%; top:0; transform:translateX(-50%); user-select:none; pointer-events:none; }
+#curiosity-photo-error { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:25px; text-align:center; color:#e2d5bd; background:#101723; font-size:13px; }
+.curiosity-photo-note { padding:9px; background:#101b2b; color:#b3c5dd; font-size:11px; line-height:1.5; }
+#curiosity-zoom { width: 95px; accent-color:#fbbf24; }
+@media (max-width: 850px) {
+  #curiosity-explorer { flex-direction: column-reverse; }
+  #curiosity-panel { width:100%; max-width:none; min-width:0; height:45%; border-right:0; border-top:1px solid #324d70; }
+  #curiosity-map-wrap { min-height: 45%; }
+  #curiosity-panel h2 { font-size:16px; }
+  .curiosity-stat-grid { grid-template-columns: repeat(4,1fr); }
+  .curiosity-stat strong { font-size:13px; }
+}
+@media (max-width: 450px) { .curiosity-stat-grid { grid-template-columns:1fr 1fr; } }

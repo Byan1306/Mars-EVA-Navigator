@@ -18,6 +18,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Curiosity JavaScript
+        run: |
+          node --check curiosity_explorer.js
+          node --test tests/curiosity.test.cjs
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
       - name: Check Python compilation
