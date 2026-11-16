@@ -46,6 +46,10 @@ def build(output: Path, dem: Path) -> None:
         raise FileNotFoundError("Three.js is missing. Run npm install before building.")
     (output / "vendor").mkdir(exist_ok=True)
     shutil.copy2(three, output / "vendor" / "three.module.js")
+    three_core = ROOT / "node_modules" / "three" / "build" / "three.core.js"
+    if not three_core.is_file():
+        raise FileNotFoundError("Three.js core module missing. Run npm install.")
+    shutil.copy2(three_core, output / "vendor" / "three.core.js")
     # Optional USGS-registered CTX texture; never ship unverified arbitrary imagery.
     texture = ROOT / "jezero_ortho.jpg"
     texture_meta = ROOT / "jezero_ortho_meta.json"
