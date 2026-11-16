@@ -145,8 +145,29 @@ See [LICENSE](LICENSE). The repository is public but not open-source licensed; r
 | `tests/test_project.py` | Regression tests |
 | `.github/workflows/verify.yml` | Automated verification |
 | `LICENSE` | Copyright notice |
+| `curiosity_explorer.js` | Curiosity timeline, full track loader, NASA photo viewer |
+| `curiosity_explorer.css` | Responsive mission explorer styles |
+| `tests/curiosity.test.cjs` | JavaScript and mission-data regression tests |
 
 The local catalog database is included. If that database is removed, the server may require a separate `catalog_seed.json` file to rebuild the catalog; that seed file is not currently published in this repository.
+
+## Curiosity Mission Explorer — full historical traverse and 360° panoramas
+
+Choose **Ruta Curiosity · 360°** in the top navigation. This independent view does not change Jezero EVA simulation data or replace them with Curiosity's route.
+
+- **Entire available rover track:** the browser loads the [Curiosity traverse compilation](https://azmth.space/data/mars-traverses/curiosity.json), based on NASA/JPL-Caltech MMGIS MSL traverse and waypoint layers. The geometrical path has more than 20,000 vertices as of November 2026. The dataset is fetched at runtime and is *not* copied into this repository.
+- **Time controls:** scrub by Mars sol, jump to a sol, replay the historic route, inspect locations, and fit all published geometry.
+- **NASA panorama gallery:** ten curated, NASA-documented 360° horizontal panoramas (Navcam and Mastcam) spanning the 2012–2026 mission. Where a resized image is available, you can pan and zoom it locally. Very large panoramas link to NASA without automatically loading gigabytes of image data.
+- **Inspect/export:** each selected sol links to NASA's raw-image index, and the route can be exported as GeoJSON with its source/limitations.
+- **Offline or blocked sources:** if the full traverse cannot be fetched, the UI attempts to load the [NASA MMGIS waypoint dataset](https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json). These waypoints are connected with a **dashed approximation**—NOT falsely presented as exact wheel tracks. If neither source can be obtained, the UI displays an error and **does not draw fictional history**.
+
+### Scientific provenance and limitations
+
+**NASA/JPL-Caltech** owns the mission geometry; [azmth.space](https://azmth.space/mars/data) distributes its compilation under **CC BY 4.0**. The original NASA MMGIS traverse has no per-vertex time labels; the compiler assigns exact sols to NASA waypoints and interpolates between them. Panoramas are associated with the path by documented **sol**, not independently verified camera coordinates. The rendered path is not a certified EVA route. The Mars Trek Viking base imagery is a coarse global mosaic, not HiRISE/CTX high-resolution Gale imagery. The displayed geometric trail length is not NASA rover odometry.
+
+All panoramas link to NASA Science original resource pages and retain NASA/JPL-Caltech camera credits. Images are fetched as needed rather than bundled, and third-party rights remain unchanged.
+
+Verification: `node --test tests/curiosity.test.cjs` and `node --check curiosity_explorer.js`, in addition to the existing Python tests.
 
 ## Scientific limitations
 
