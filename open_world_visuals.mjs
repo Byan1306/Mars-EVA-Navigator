@@ -131,6 +131,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
       root.position.sub(new THREE.Vector3(center.x,newBounds.min.y,center.z));
       // NASA model faces away from the camera when character faces -Z;
       // its source coordinate frame is preserved within this scene root.
+      root.rotation.y=Math.PI; // display the backpack toward the third-person camera
       stylized.visible=false;
       body.add(root);
       modelRoot=root;
@@ -291,7 +292,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
       dummy.updateMatrix();
       large.setMatrixAt(count,dummy.matrix);
       const hue=hash(gx,gz,8);
-      tint.setRGB(.33+hue*.24,.22+hue*.16,.17+hue*.11);
+      tint.setRGB(.26+hue*.19,.16+hue*.13,.13+hue*.095);
       large.setColorAt(count,tint);
       count++;
     }
