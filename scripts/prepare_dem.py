@@ -5,6 +5,7 @@ No synthetic elevations are generated. Source GeoTIFF files remain local; a smal
 precomputed JSON can be published on a static site after scientific review.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -32,37 +33,66 @@ USGS_DATASETS = {
 DEFAULT_BBOX = (77.390, 18.425, 77.475, 18.475)
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(2 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def download_dataset(source: str, destination: Path) -> Path:
+    """Official USGS host first; use its public PDS S3 mirror after HTTP blocking."""
     info = USGS_DATASETS[source]
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         print(f"Using existing file: {destination}")
         return destination
     partial = destination.with_suffix(destination.suffix + ".part")
-    print(f"Downloading official USGS {source.upper()} DEM from:\n{info['url']}")
-    request = Request(info["url"], headers={"User-Agent": "Mars-EVA-Navigator/2026"})
-    try:
-        with urlopen(request, timeout=90) as response, partial.open("wb") as out:
-            total = response.headers.get("Content-Length")
-            expected = int(total) if total and total.isdigit() else None
-            received = 0
-            while True:
-                chunk = response.read(2 * 1024 * 1024)
-                if not chunk:
-                    break
-                out.write(chunk)
-                received += len(chunk)
-            if expected is not None and received != expected:
-                raise OSError(f"Download incomplete: got {received} of {expected} bytes")
-        if partial.stat().st_size < 1024:
-            raise OSError("Download is too small to be a valid GeoTIFF.")
-        partial.replace(destination)
-    except BaseException:
-        partial.unlink(missing_ok=True)
-        raise
-    print(f"Downloaded: {destination} ({destination.stat().st_size / 1024**2:.1f} MiB)")
-    return destination
-
+    mirror = info["url"].replace(
+        "https://planetarymaps.usgs.gov/",
+        "https://asc-pds-services.s3.us-west-2.amazonaws.com/",
+        1,
+    )
+    attempts = [info["url"], mirror]
+    errors = []
+    for url in attempts:
+        print(f"Requesting official USGS {source.upper()} DEM: {url}")
+        request = Request(url, headers={"User-Agent": "Mars-EVA-Navigator/2026"})
+        try:
+            with urlopen(request, timeout=90) as response, partial.open("wb") as out:
+                total = response.headers.get("Content-Length")
+                expected = int(total) if total and total.isdigit() else None
+                received = 0
+                while True:
+                    chunk = response.read(2 * 1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    received += len(chunk)
+                if expected is not None and received != expected:
+                    raise OSError(f"Incomplete download: {received} of {expected} bytes")
+            if partial.stat().st_size < 1024:
+                raise OSError("Download is too small to be a valid GeoTIFF.")
+            partial.replace(destination)
+            provenance = {
+                "dataset": source,
+                "origin_url": info["url"],
+                "download_url": url,
+                "sha256": sha256_file(destination),
+                "size_bytes": destination.stat().st_size,
+                "source_institution": "USGS Astrogeology Science Center",
+            }
+            destination.with_suffix(destination.suffix + ".provenance.json").write_text(
+                json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+            )
+            print(f"Downloaded: {destination} ({destination.stat().st_size / 1024**2:.1f} MiB)")
+            return destination
+        except (OSError, TimeoutError, ValueError) as exc:
+            partial.unlink(missing_ok=True)
+            errors.append(f"{url}: {exc}")
+            print(f"Source unavailable: {exc}")
+    raise OSError("Could not download a real DEM.\n" + "\n".join(errors))
 
 def validate_dataset(path: Path) -> None:
     import rasterio
@@ -88,6 +118,22 @@ def export_json(path: Path, output: Path, bbox: tuple, size: int) -> None:
             os.environ.pop("MARS_DEM_PATH", None)
         else:
             os.environ["MARS_DEM_PATH"] = previous
+    provenance_path = path.with_suffix(path.suffix + ".provenance.json")
+    if provenance_path.is_file():
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+        if provenance.get("sha256") != sha256_file(path):
+            raise ValueError("DEM checksum differs from recorded USGS download.")
+        data["source_url"] = provenance["origin_url"]
+        data["download_url"] = provenance["download_url"]
+        data["source_sha256"] = provenance["sha256"]
+        data["source_institution"] = provenance["source_institution"]
+    else:
+        data["source_url"] = None
+        data["source_institution"] = "Not independently verified; inspect this input GeoTIFF."
+    data["scientific_limitations"] = (
+        "Measured surface heights resampled to a grid; not rover-verified walking "
+        "safety, real-time weather, or subcell obstacle detection."
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     partial = output.with_suffix(output.suffix + ".part")
     try:
