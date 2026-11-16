@@ -86,6 +86,7 @@ class WebTests(unittest.TestCase):
             self.assertIn('text/css', client.get('/open_world.css').headers.get('content-type',''))
             self.assertIn('javascript', client.get('/open_world_core.js').headers.get('content-type',''))
             self.assertEqual(client.get('/vendor/three.module.js').status_code, 200)
+            self.assertEqual(client.get('/vendor/three.core.js').status_code, 200)
             self.assertEqual(client.get('/node_modules/three/build/three.module.js').status_code, 404)
             self.assertEqual(client.get('/jezero_ortho.jpg').status_code, 404)
 
