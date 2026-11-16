@@ -79,6 +79,16 @@ class DEMTests(unittest.TestCase):
 
 
 class WebTests(unittest.TestCase):
+    def test_open_world_routes_keep_app_and_vendor_explicit(self):
+        with TestClient(app) as client:
+            self.assertIn('open_world.mjs', client.get('/').text)
+            self.assertEqual(client.get('/open_world.html').status_code, 200)
+            self.assertIn('text/css', client.get('/open_world.css').headers.get('content-type',''))
+            self.assertIn('javascript', client.get('/open_world_core.js').headers.get('content-type',''))
+            self.assertEqual(client.get('/vendor/three.module.js').status_code, 200)
+            self.assertEqual(client.get('/node_modules/three/build/three.module.js').status_code, 404)
+            self.assertEqual(client.get('/jezero_ortho.jpg').status_code, 404)
+
     def test_github_pages_entry(self):
         root = Path(__file__).resolve().parents[1]
         index = (root / "index.html").read_text(encoding="utf-8")
