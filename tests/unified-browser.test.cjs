@@ -50,6 +50,13 @@ const server=http.createServer((req,res)=>{
   out.bones=Number(await page.locator('body').getAttribute('data-astronaut-bones'));
   if(out.bones!==206||out.footsteps<=0)throw Error('Rig IK did not animate real bones on measured ground');
   await page.screenshot({path:path.join(evidence,'NASA-Z2-rigged-EVA.png')});
+  // Educational diagnostic: make all anatomical joint lines visible on demand.
+  await page.keyboard.press('k');
+  const anatomyVisible=await page.locator('body').getAttribute('data-astronaut-bone-overlay');
+  if(anatomyVisible!=='true')throw Error('206 anatomical joint diagnostic overlay failed to appear');
+  await page.waitForTimeout(180);
+  await page.screenshot({path:path.join(evidence,'NASA-Z2-anatomy-206-overlay.png')});
+  out.anatomyOverlayVerified=true;
   out.screenshot=true;out.status='passed';
  }catch(e){out.status='failed';out.error=String(e.stack||e)}
  finally{
