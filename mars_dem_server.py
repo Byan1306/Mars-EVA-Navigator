@@ -332,9 +332,9 @@ def motion_genesis_controller():
     return FileResponse(path, media_type='text/javascript')
 
 
-@app.get('/assets/astronaut_z2_rigged.glb', include_in_schema=False)
+@app.get('/assets/astronaut_z2_anatomical_206.glb', include_in_schema=False)
 def verified_motion_suit():
-    path = BASE_DIR / 'assets' / 'astronaut_z2_rigged.glb'
+    path = BASE_DIR / 'assets' / 'astronaut_z2_anatomical_206.glb'
     if not path.is_file():
         raise HTTPException(404, 'Ejecuta scripts/build_motion_asset.py para generar el rig educativo.')
     return FileResponse(path, media_type='model/gltf-binary')
