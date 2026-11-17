@@ -109,6 +109,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   // It is static unless its GLB supplies animations, and never claimed to
   // represent a real Mars EVA suit currently deployed on Mars.
   let modelRoot=null,modelController=null,modelState='recreado 3D';
+  let anatomyHelper=null;
   const loader=new GLTFLoader();
   const draco=new DRACOLoader();
   draco.setDecoderPath('./vendor/draco/');
@@ -330,14 +331,29 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
     if(q==='low')renderer.shadowMap.enabled=false;
     lastQuality='';
   }
+  function toggleAnatomy(){
+    if(!modelRoot)return false;
+    if(!anatomyHelper){
+      // Diagnostic overlay only, disabled by default: no anatomical scan claimed.
+      anatomyHelper=new THREE.SkeletonHelper(modelRoot);
+      anatomyHelper.material.depthTest=false;
+      anatomyHelper.material.transparent=true;
+      anatomyHelper.material.opacity=.85;
+      scene.add(anatomyHelper);
+    } else anatomyHelper.visible=!anatomyHelper.visible;
+    document.body.dataset.astronautBoneOverlay=String(anatomyHelper.visible);
+    return anatomyHelper.visible;
+  }
   function dispose(){
+    if(anatomyHelper){scene.remove(anatomyHelper);anatomyHelper.geometry.dispose();anatomyHelper.material.dispose();}
+    modelController?.dispose();
     scene.remove(body,shadow,sky,warmLight,fillLight,large);
     rockGeo.dispose();large.material.dispose();
     shadow.geometry.dispose();shadow.material.dispose();shadowTex.dispose();
     sky.geometry.dispose();sky.material.dispose();grains.dispose();draco.dispose();
   }
   document.body.dataset.astronaut='procedural';
-  return {avatar:body,enhanceMaterial,update,setQuality,dispose,
+  return {avatar:body,enhanceMaterial,update,setQuality,toggleAnatomy,dispose,
     source:'NASA Z-2, when official model available; otherwise detailed procedural suit',
     visualStatus:()=>modelState};
 }
