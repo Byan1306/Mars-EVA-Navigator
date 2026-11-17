@@ -173,8 +173,8 @@ function updateMotion(dt) {
   const f=(keys.has('w')?1:0)-(keys.has('s')?1:0);
   const side=(keys.has('d')?1:0)-(keys.has('a')?1:0);
   const norm=Math.hypot(f,side)||1;
-  let speed=mode==='fly'?75:(keys.has('c')?3:12);
-  if(keys.has('shift'))speed*=mode==='fly'?3:3;
+  let speed=mode==='fly'?75:(keys.has('c')?.85:1.45);
+  if(keys.has('shift'))speed*=mode==='fly'?3:1.7;
   const moveX=(Math.sin(yaw)*f+Math.cos(yaw)*side)/norm*speed*dt;
   const moveZ=(-Math.cos(yaw)*f+Math.sin(yaw)*side)/norm*speed*dt;
   const targetX=player.x+moveX,targetZ=player.z+moveZ;
