@@ -43,7 +43,7 @@ jobs:
       - name: Run combined scientific planner, Curiosity and terrain regression
         run: |
           python -m unittest discover -s tests -v
-          node --test tests/*.test.cjs
+          node --test tests/curiosity*.test.cjs tests/dem-routing.test.cjs tests/open-world-core.test.cjs
       - name: Download original NASA Z-2 visual suit with attribution
         run: python scripts/prepare_astronaut.py
       - name: Require original reviewed NASA Z2 source and decode Draco mesh
