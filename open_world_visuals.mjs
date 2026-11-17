@@ -4,6 +4,7 @@
  */
 import {GLTFLoader} from './vendor/loaders/GLTFLoader.js';
 import {DRACOLoader} from './vendor/loaders/DRACOLoader.js';
+import {createAstronautMotion} from './astronaut_motion.mjs';
 
 export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   const clamp=(a,b,c)=>Math.min(c,Math.max(b,a));
@@ -107,7 +108,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   // NASA Z-2 concept suit from NASA's own 3D Resources; independent simulation.
   // It is static unless its GLB supplies animations, and never claimed to
   // represent a real Mars EVA suit currently deployed on Mars.
-  let modelRoot=null,modelMixer=null,modelState='recreado 3D';
+  let modelRoot=null,modelController=null,modelState='recreado 3D';
   const loader=new GLTFLoader();
   const draco=new DRACOLoader();
   draco.setDecoderPath('./vendor/draco/');
@@ -118,7 +119,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
     .then(async manifest=>{
       if(!manifest || manifest.publisher!=='NASA' ||
           !String(manifest.source_url||'').includes('nasa/NASA-3D-Resources')) return;
-      const gltf=await loader.loadAsync('./assets/astronaut_z2.glb');
+      const gltf=await loader.loadAsync('./assets/astronaut_z2_rigged.glb');
       const root=gltf.scene;
       const bounds=new THREE.Box3().setFromObject(root);
       const ext=bounds.getSize(new THREE.Vector3());
@@ -135,17 +136,16 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
       stylized.visible=false;
       body.add(root);
       modelRoot=root;
-      if(gltf.animations?.length){
-        modelMixer=new THREE.AnimationMixer(root);
-        modelMixer.clipAction(gltf.animations[0]).play();
-      }
+      modelController=createAstronautMotion({THREE,root,gltf,
+        sampleGround:(x,z)=>{const h=core.sample(dem,x,z);return h===null?null:h-dem.ref;},
+        quality:'balanced'});
       root.traverse(object=>{
         if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}
       });
-      modelState='NASA Z-2 / concepto 3D';
-      document.body.dataset.astronaut='nasa-z2';
+      modelState='NASA Z-2 / rig articulado educativo (18 huesos + IK)';
+      document.body.dataset.astronaut='nasa-z2-rigged';
       const evidence=document.getElementById('visualEvidence');
-      if(evidence)evidence.textContent='Astronauta: traje conceptual Z-2 (modelo 3D de NASA).';
+      if(evidence)evidence.textContent='NASA Z-2: geometría auténtica, rig de 18 huesos y animación educativos. No es marcha EVA certificada.';
     })
     .catch(err=>{
       console.warn('Modelo NASA no disponible: se conserva astronauta 3D de respaldo.',err);
@@ -313,8 +313,8 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
       limbs.arms.forEach(({pivot,side})=>{pivot.rotation.x=-Math.sin(stride+side*PI/2)*.32*intensity;});
       stylized.position.y=.02*Math.sin(time*1.6)+.036*Math.sin(stride*2)*intensity;
     } else {
-      modelMixer?.update(dt);
-      modelRoot.position.y=(Math.sin(time*1.6)*.01+Math.sin(time*9)*.023*intensity);
+      // Animated *bones* with real travel speed and DEM-aware two-bone foot IK.
+      modelController?.update({dt,player,active:body.visible,fly:mode==='fly',quality});
     }
     sky.position.copy(camera.position);
     shadow.position.set(player.x,player.y+.025,player.z);
