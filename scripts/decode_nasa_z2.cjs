@@ -9,7 +9,18 @@ const expected='4199762c27f8e730030a7bf9f1a453c203457e84c33b36247c0237a74f9a0c2a
 const found=crypto.createHash('sha256').update(payload).digest('hex');
 if(found!==expected)throw Error('NASA Z-2 original SHA256 does not match inspected source: '+found);
 fs.mkdirSync(out,{recursive:true});
-const factory=require(path.resolve(decoderPath));
+let factory=require(path.resolve(decoderPath));
+if(typeof factory!=='function'){
+ // Three.js 0.180 includes a browser-global decoder without CommonJS export.
+ // Evaluate the pinned local decoder source in an isolated Node VM only.
+ const vm=require('node:vm');
+ const scope={module:{exports:{}},exports:{},console,process,Buffer,
+   WebAssembly,TextDecoder,TextEncoder,setTimeout,clearTimeout};
+ vm.runInNewContext(fs.readFileSync(decoderPath,'utf8')+
+   '\n;module.exports = DracoDecoderModule;',scope,{timeout:30000});
+ factory=scope.module.exports;
+}
+if(typeof factory!=='function')throw Error('Local Three.js Draco decoder does not expose a factory');
 (async()=>{
  const m=await factory(),length=payload.readUInt32LE(12);
  const gltf=JSON.parse(payload.subarray(20,20+length).toString());
