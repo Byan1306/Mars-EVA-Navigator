@@ -92,6 +92,26 @@ jobs:
           path: _unified/Mars_EVA_Navigator_Unified/
           if-no-files-found: error
           retention-days: 7
+      - name: Publish auditable scientific and skeletal source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_EVA_Unified_Science_Animation_Source
+          path: |
+            mars_dem_server.py
+            scripts/prepare_dem.py
+            scripts/verify_dem.py
+            scripts/prepare_astronaut.py
+            scripts/decode_nasa_z2.cjs
+            scripts/build_motion_asset.py
+            scripts/build_static_site.py
+            tests/test_dem.py
+            tests/test_prepare_dem.py
+            tests/dem-routing.test.cjs
+            tests/unified-browser.test.cjs
+            docs/jezero-dem.md
+            docs/jezero-dem-verification.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Publish Chrome motion evidence
         if: always()
         uses: actions/upload-artifact@v4
