@@ -344,6 +344,11 @@ function initInput() {
     if(e.repeat)return;
     if(key==='f')setCamera(mode==='fly'?'first':'fly');
     if(key==='v')setCamera(mode==='first'?'third':'first');
+    if(key==='k'){
+      const enabled=visuals?.toggleAnatomy();
+      notice(enabled?'Esqueleto anatómico conceptual: 206 huesos (K para ocultar).':
+        'Superposición anatómica desactivada.');
+    }
     if(key==='r'&&d) {
       const start=C.findStart(d);player={x:start.x,y:start.height-d.ref,z:start.z};
       grounded=true;verticalSpeed=0;notice('Posición restaurada a una celda DEM válida.');
