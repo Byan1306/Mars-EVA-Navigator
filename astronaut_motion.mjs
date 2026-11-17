@@ -7,8 +7,9 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
  if(!skin.length)throw Error('Z-2 humanoid needs a SkinnedMesh');
  const bones=skin[0].skeleton.bones;
  const byName=Object.fromEntries(bones.map(b=>[b.name,b]));
- for(const name of ['LeftUpperLeg','RightUpperLeg','LeftLowerLeg','RightLowerLeg',
-   'LeftFoot','RightFoot','LeftUpperArm','RightUpperArm','Hips','Spine','Chest'])
+ for(const name of ['L_Femur','R_Femur','L_Tibia','R_Tibia',
+   'L_Tarsal_Talus','R_Tarsal_Talus','L_Humerus','R_Humerus',
+   'Sacrum','Lumbar_L3','Thoracic_T7'])
   if(!byName[name])throw Error('Missing rigged bone '+name);
  const mixer=new THREE.AnimationMixer(root),actions={};
  for(const clip of gltf.animations){
@@ -19,11 +20,12 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
  }
  if(!actions.walk||!actions.fast_walk||!actions.idle)
   throw Error('NASA Z-2 educational rig missing locomotion clips');
- const feet=[{side:-1,upper:byName.LeftUpperLeg,lower:byName.LeftLowerLeg,
-   foot:byName.LeftFoot,lock:new THREE.Vector3(),begin:new THREE.Vector3(),
+ if(bones.length!==206)throw Error('Expected exactly 206 anatomical joints, received '+bones.length);
+ const feet=[{side:-1,upper:byName.L_Femur,lower:byName.L_Tibia,
+   foot:byName.L_Tarsal_Talus,lock:new THREE.Vector3(),begin:new THREE.Vector3(),
    end:new THREE.Vector3(),active:false,swing:false},
- {side:1,upper:byName.RightUpperLeg,lower:byName.RightLowerLeg,
-   foot:byName.RightFoot,lock:new THREE.Vector3(),begin:new THREE.Vector3(),
+ {side:1,upper:byName.R_Femur,lower:byName.R_Tibia,
+   foot:byName.R_Tarsal_Talus,lock:new THREE.Vector3(),begin:new THREE.Vector3(),
    end:new THREE.Vector3(),active:false,swing:false}];
  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
  const smooth=v=>v*v*(3-2*v);
@@ -37,8 +39,8 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
  }
  function solve(leg,worldPosition){
    target.copy(worldPosition);root.worldToLocal(target);
-   const dy=target.y-.935,dz=target.z;
-   const L1=.47,L2=Math.hypot(.35,.06);
+   const dy=target.y-.88,dz=target.z;
+   const L1=.41,L2=Math.hypot(.36,.06);
    const distance=clamp(Math.hypot(dy,dz),Math.abs(L1-L2)+.01,L1+L2-.002);
    const ray=Math.atan2(-dz,-dy);
    const hipAngle=clamp(ray-Math.acos(clamp((L1*L1+distance*distance-L2*L2)/
@@ -114,6 +116,7 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
    document.body.dataset.astronautMotion=mode;
    document.body.dataset.astronautIkSolves=String(updates);
    document.body.dataset.astronautBones=String(bonesCount);
+   document.body.dataset.astronautAnatomy='80 axial + 126 appendicular';
    document.body.dataset.astronautRigged='true';
    return {mode,speedMps:measuredSpeed,ikSolves:updates};
  }

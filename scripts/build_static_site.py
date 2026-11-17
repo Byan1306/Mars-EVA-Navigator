@@ -70,13 +70,13 @@ def build(output: Path, dem: Path) -> None:
             raise FileNotFoundError(f"Local Draco decoder missing: {name}")
         shutil.copy2(decoder_file, decoder_dir / name)
     astronaut = ROOT / "assets" / "astronaut_z2.glb"
-    animated_suit = ROOT / "assets" / "astronaut_z2_rigged.glb"
+    animated_suit = ROOT / "assets" / "astronaut_z2_anatomical_206.glb"
     astronaut_meta = ROOT / "assets" / "astronaut_manifest.json"
     if astronaut.is_file() and astronaut_meta.is_file():
         (output / "assets").mkdir(exist_ok=True)
         shutil.copy2(astronaut, output / "assets" / astronaut.name)
         if not animated_suit.is_file():
-            raise FileNotFoundError("Motion Genesis requires a true rigged NASA Z-2 asset. Run scripts/build_motion_asset.py.")
+            raise FileNotFoundError("Motion Genesis requires a 206-bone NASA Z-2 educational rig. Run scripts/build_motion_asset.py.")
         shutil.copy2(animated_suit, output / "assets" / animated_suit.name)
         shutil.copy2(astronaut_meta, output / "assets" / astronaut_meta.name)
     # Optional USGS-registered CTX texture; never ship unverified arbitrary imagery.

@@ -48,7 +48,7 @@ jobs:
       - name: Build independently animated NASA Z-2 suit
         run: |
           node scripts/decode_nasa_z2.cjs assets/astronaut_z2.glb node_modules/three/examples/jsm/libs/draco/draco_decoder.js _motion_raw
-          python scripts/build_motion_asset.py assets/astronaut_z2.glb _motion_raw assets/astronaut_z2_rigged.glb
+          python scripts/build_motion_asset.py assets/astronaut_z2.glb _motion_raw assets/astronaut_z2_anatomical_206.glb
       - name: Build minimal public website (no secrets or raw GeoTIFF)
         run: python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site
       # Always provide a portable science demo, even before Pages is enabled.

@@ -1,10 +1,10 @@
-name: Unified NASA science + animated Z2 astronaut
+name: Unified NASA science + 206-bone anatomical Z2 astronaut
 
 on:
   push:
-    branches: [feature/mars-eva-unified-motion-science]
+    branches: [feature/mars-eva-unified-motion-science, feature/astronaut-anatomical-206]
   pull_request:
-    branches: [feature/jezero-60km-named-region]
+    branches: [feature/jezero-60km-named-region, feature/mars-eva-unified-motion-science]
   workflow_dispatch:
 
 permissions:
@@ -52,29 +52,31 @@ jobs:
             assets/astronaut_z2.glb \
             node_modules/three/examples/jsm/libs/draco/draco_decoder.js \
             _motion_raw
-      - name: Produce actual 18-bone skinned NASA visual suit
+      - name: Produce 206-bone anatomically named NASA educational suit
         run: |
           python scripts/build_motion_asset.py \
             assets/astronaut_z2.glb \
             _motion_raw \
-            assets/astronaut_z2_rigged.glb
+            assets/astronaut_z2_anatomical_206.glb
       - name: Validate file integrity, glTF skin and animation clips
         run: |
           python - <<'PY'
           import json,struct
           from pathlib import Path
-          p=Path('assets/astronaut_z2_rigged.glb')
+          p=Path('assets/astronaut_z2_anatomical_206.glb')
           b=p.read_bytes()
           assert b[:4]==b'glTF' and struct.unpack_from('<I',b,8)[0]==len(b)
           n=struct.unpack_from('<I',b,12)[0]
           data=json.loads(b[20:20+n])
-          assert len(data['skins'])==1 and len(data['skins'][0]['joints'])==18
+          assert len(data['skins'])==1 and len(data['skins'][0]['joints'])==206
           assert set(a['name'] for a in data['animations'])=={'idle','walk','fast_walk'}
           attrs=data['meshes'][0]['primitives'][0]['attributes']
           assert 'WEIGHTS_0' in attrs and 'JOINTS_0' in attrs
           assert len(b)<30_000_000
-          print('Verified original NASA Z-2 appearance, 18-joint skinned educational mesh, three clips')
+          print('Verified NASA Z-2 visual geometry; 206 anatomical joints, 80 axial and 126 appendicular, three clips')
           PY
+      - name: Independently verify 206 adult bones and GPU skinning
+        run: python scripts/verify_anatomy206.py assets/astronaut_z2_anatomical_206.glb
       - name: Build standalone offline web app with Astra validated CTX
         run: |
           python scripts/build_static_site.py \
@@ -82,7 +84,6 @@ jobs:
             --output _unified/Mars_EVA_Navigator_Unified
       - name: Verify actual WebGL suit and gait in Chrome
         id: browser
-        continue-on-error: true
         timeout-minutes: 5
         run: node tests/unified-browser.test.cjs
       - name: Publish completed runnable Windows-compatible website
@@ -103,11 +104,14 @@ jobs:
             scripts/prepare_astronaut.py
             scripts/decode_nasa_z2.cjs
             scripts/build_motion_asset.py
+            scripts/anatomy206.py
+            scripts/verify_anatomy206.py
             scripts/build_static_site.py
             tests/test_dem.py
             tests/test_prepare_dem.py
             tests/dem-routing.test.cjs
             tests/unified-browser.test.cjs
+            docs/ANATOMY_206.md
             docs/jezero-dem.md
             docs/jezero-dem-verification.json
           if-no-files-found: error

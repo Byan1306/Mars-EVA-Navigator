@@ -109,6 +109,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   // It is static unless its GLB supplies animations, and never claimed to
   // represent a real Mars EVA suit currently deployed on Mars.
   let modelRoot=null,modelController=null,modelState='recreado 3D';
+  let anatomyHelper=null;
   const loader=new GLTFLoader();
   const draco=new DRACOLoader();
   draco.setDecoderPath('./vendor/draco/');
@@ -119,7 +120,7 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
     .then(async manifest=>{
       if(!manifest || manifest.publisher!=='NASA' ||
           !String(manifest.source_url||'').includes('nasa/NASA-3D-Resources')) return;
-      const gltf=await loader.loadAsync('./assets/astronaut_z2_rigged.glb');
+      const gltf=await loader.loadAsync('./assets/astronaut_z2_anatomical_206.glb');
       const root=gltf.scene;
       const bounds=new THREE.Box3().setFromObject(root);
       const ext=bounds.getSize(new THREE.Vector3());
@@ -142,10 +143,10 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
       root.traverse(object=>{
         if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}
       });
-      modelState='NASA Z-2 / rig articulado educativo (18 huesos + IK)';
-      document.body.dataset.astronaut='nasa-z2-rigged';
+      modelState='NASA Z-2 / rig anatómico educativo (206 huesos + IK)';
+      document.body.dataset.astronaut='nasa-z2-anatomical-206';
       const evidence=document.getElementById('visualEvidence');
-      if(evidence)evidence.textContent='NASA Z-2: geometría auténtica, rig de 18 huesos y animación educativos. No es marcha EVA certificada.';
+      if(evidence)evidence.textContent='NASA Z-2: geometría auténtica, rig anatómico de 206 huesos (80 axial, 126 apendicular) y animación educativos. No es marcha EVA certificada.';
     })
     .catch(err=>{
       console.warn('Modelo NASA no disponible: se conserva astronauta 3D de respaldo.',err);
@@ -330,14 +331,29 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
     if(q==='low')renderer.shadowMap.enabled=false;
     lastQuality='';
   }
+  function toggleAnatomy(){
+    if(!modelRoot)return false;
+    if(!anatomyHelper){
+      // Diagnostic overlay only, disabled by default: no anatomical scan claimed.
+      anatomyHelper=new THREE.SkeletonHelper(modelRoot);
+      anatomyHelper.material.depthTest=false;
+      anatomyHelper.material.transparent=true;
+      anatomyHelper.material.opacity=.85;
+      scene.add(anatomyHelper);
+    } else anatomyHelper.visible=!anatomyHelper.visible;
+    document.body.dataset.astronautBoneOverlay=String(anatomyHelper.visible);
+    return anatomyHelper.visible;
+  }
   function dispose(){
+    if(anatomyHelper){scene.remove(anatomyHelper);anatomyHelper.geometry.dispose();anatomyHelper.material.dispose();}
+    modelController?.dispose();
     scene.remove(body,shadow,sky,warmLight,fillLight,large);
     rockGeo.dispose();large.material.dispose();
     shadow.geometry.dispose();shadow.material.dispose();shadowTex.dispose();
     sky.geometry.dispose();sky.material.dispose();grains.dispose();draco.dispose();
   }
   document.body.dataset.astronaut='procedural';
-  return {avatar:body,enhanceMaterial,update,setQuality,dispose,
+  return {avatar:body,enhanceMaterial,update,setQuality,toggleAnatomy,dispose,
     source:'NASA Z-2, when official model available; otherwise detailed procedural suit',
     visualStatus:()=>modelState};
 }

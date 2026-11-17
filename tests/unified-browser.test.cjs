@@ -21,7 +21,7 @@ const server=http.createServer((req,res)=>{
  const out={status:'started',worldReady:false,rigged:false,bones:0,
   footsteps:0,walkMotion:false,screenshot:false,errors:[],requestErrors:[]};
  try{
-  if(!fs.existsSync(path.join(root,'assets/astronaut_z2_rigged.glb')))throw Error('No rigged NASA Z2 asset');
+  if(!fs.existsSync(path.join(root,'assets/astronaut_z2_anatomical_206.glb')))throw Error('No rigged NASA Z2 asset');
   await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
   browser=await chromium.launch({channel:'chrome',headless:true,args:[
    '--no-sandbox','--disable-dev-shm-usage','--enable-webgl',
@@ -48,8 +48,15 @@ const server=http.createServer((req,res)=>{
   const after=Number(await page.locator('body').getAttribute('data-astronaut-ik-solves'));
   out.footsteps=after-before;
   out.bones=Number(await page.locator('body').getAttribute('data-astronaut-bones'));
-  if(out.bones<18||out.footsteps<=0)throw Error('Rig IK did not animate real bones on measured ground');
+  if(out.bones!==206||out.footsteps<=0)throw Error('Rig IK did not animate real bones on measured ground');
   await page.screenshot({path:path.join(evidence,'NASA-Z2-rigged-EVA.png')});
+  // Educational diagnostic: make all anatomical joint lines visible on demand.
+  await page.keyboard.press('k');
+  const anatomyVisible=await page.locator('body').getAttribute('data-astronaut-bone-overlay');
+  if(anatomyVisible!=='true')throw Error('206 anatomical joint diagnostic overlay failed to appear');
+  await page.waitForTimeout(180);
+  await page.screenshot({path:path.join(evidence,'NASA-Z2-anatomy-206-overlay.png')});
+  out.anatomyOverlayVerified=true;
   out.screenshot=true;out.status='passed';
  }catch(e){out.status='failed';out.error=String(e.stack||e)}
  finally{

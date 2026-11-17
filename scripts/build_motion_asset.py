@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib, json, math, struct, sys
 from pathlib import Path
 import numpy as np
+from anatomy206 import create_skeleton
 
 EXPECTED='4199762c27f8e730030a7bf9f1a453c203457e84c33b36247c0237a74f9a0c2a'
 
@@ -36,52 +37,56 @@ def build(src,decoded,dest):
  nrm=np.stack((normals[:,0],-normals[:,2],normals[:,1]),axis=1)
  x,y,z=pos.T
  # Joint parent indices and parent-local rest translations in metres.
- joints=[
-  ('RigRoot',-1,(0,0,0)),
-  ('Hips',0,(0,.95,0)),('Spine',1,(0,.28,0)),
-  ('Chest',2,(0,.27,0)),('Neck',3,(0,.24,0)),
-  ('Head',4,(0,.11,0)),
-  ('LeftUpperLeg',1,(-.205,-.015,0)),
-  ('LeftLowerLeg',6,(0,-.47,0)),('LeftFoot',7,(0,-.35,-.06)),
-  ('RightUpperLeg',1,(.205,-.015,0)),
-  ('RightLowerLeg',9,(0,-.47,0)),('RightFoot',10,(0,-.35,-.06)),
-  ('LeftUpperArm',3,(-.29,.01,0)),
-  ('LeftForearm',12,(-.045,-.32,0)),
-  ('LeftHand',13,(0,-.25,0)),
-  ('RightUpperArm',3,(.29,.01,0)),
-  ('RightForearm',15,(.045,-.32,0)),
-  ('RightHand',16,(0,-.25,0))
- ]
+ anatomy=create_skeleton()
+ boneIndex={b.name:i for i,b in enumerate(anatomy)}
+ coords={b.name:np.array(b.xyz) for b in anatomy}
+ joints=[(b.name,boneIndex[b.parent] if b.parent else -1,
+          tuple(coords[b.name]-coords[b.parent]) if b.parent else b.xyz)
+         for b in anatomy]
+ assert len(joints)==206
  world=[]
  for name,parent,local in joints:
   world.append(np.array(local)+(world[parent] if parent>=0 else 0))
+ # 206 anatomically named bones, but only surface joints are skin-weighted.
+ # Finger phalanges remain anatomical control points where NASA's fabric
+ # mesh does not separate individual fingers. Up to 4 GPU influences / vertex.
  total=np.zeros((len(pos),len(joints)),dtype=np.float32)
- head=smooth(1.72,1.82,y)
- chest=smooth(1.17,1.40,y)*(1-smooth(1.66,1.83,y))
- spine=smooth(.96,1.18,y)*(1-smooth(1.42,1.58,y))
- hips=np.clip(1-head-chest-spine,0,1)
- total[:,1]=hips;total[:,2]=spine;total[:,3]=chest;total[:,5]=head
- right=smooth(-.06,.10,x)
- legMask=1-smooth(.83,.98,y)
- thigh=smooth(.43,.57,y)
- ankle=smooth(.13,.23,y)
- # Each side is assigned simultaneously, preserving both symmetric legs.
- for sign,side,bones in ((-1,1-right,(6,7,8)),(1,right,(9,10,11))):
-  mask=legMask*side
-  for i,f in zip(bones,(thigh,(1-thigh)*ankle,(1-thigh)*(1-ankle))):
-   total[:,i]=mask*f
- total[:,1:6]*=(1-legMask)[:,None]
- armMask=smooth(.225,.34,np.abs(x))*smooth(.94,1.12,y)
- armMask*=1-smooth(1.5,1.64,y)
- armMask*=1-smooth(.12,.32,z) # Do not warp the life-support backpack.
- upper=smooth(1.19,1.30,y)
- hand=1-smooth(.98,1.08,y)
- for side,bones in ((1-right,(12,13,14)),(right,(15,16,17))):
-  mask=armMask*side
-  for i,f in zip(bones,(upper,(1-upper)*(1-hand),(1-upper)*hand)):
-   total[:,i]=mask*f
- total[:,:12]*=(1-armMask)[:,None]
- total/=np.maximum(total.sum(axis=1,keepdims=True),1e-8)
+ head=smooth(1.72,1.83,y)
+ lower=1-smooth(.88,1.02,y)
+ armMask=smooth(.215,.33,np.abs(x))*smooth(.95,1.10,y)
+ armMask*=1-smooth(1.55,1.69,y)
+ armMask*=1-smooth(.14,.30,z)
+ body=(1-lower)*(1-armMask)
+ lumbar=(1-smooth(1.16,1.34,y))*(1-head)
+ thorax=smooth(1.14,1.34,y)*(1-head)
+ shoulders=smooth(1.44,1.58,y)
+ total[:,boneIndex['Lumbar_L3']]=body*lumbar*.84
+ total[:,boneIndex['Sacrum']]=body*lumbar*.16
+ total[:,boneIndex['Thoracic_T7']]=body*thorax*(1-shoulders)
+ total[:,boneIndex['Thoracic_T3']]=body*thorax*shoulders
+ total[:,boneIndex['Cranium_Frontal']]=body*head
+ right=smooth(-.07,.07,x)
+ for side,w in (('L',1-right),('R',right)):
+  leg=lower*w
+  thigh=smooth(.425,.58,y)
+  shin=(1-thigh)*smooth(.16,.28,y)
+  boot=(1-thigh)*(1-smooth(.16,.28,y))
+  toe=boot*smooth(-.125,-.26,-z)*smooth(.07,.13,.13-y)
+  total[:,boneIndex[f'{side}_Femur']]+=leg*thigh
+  total[:,boneIndex[f'{side}_Tibia']]+=leg*shin
+  total[:,boneIndex[f'{side}_Tarsal_Talus']]+=leg*(boot-toe)*.68
+  total[:,boneIndex[f'{side}_Metatarsal_Middle']]+=leg*(boot-toe)*.32
+  total[:,boneIndex[f'{side}_ToePhalanx_Middle_Proximal']]+=leg*toe
+  am=armMask*w
+  upper=smooth(1.22,1.33,y)
+  glove=1-smooth(.96,1.10,y)
+  total[:,boneIndex[f'{side}_Humerus']]+=am*upper
+  total[:,boneIndex[f'{side}_Radius']]+=am*(1-upper)*(1-glove)
+  total[:,boneIndex[f'{side}_Carpal_Capitate']]+=am*(1-upper)*glove*.8
+  total[:,boneIndex[f'{side}_Metacarpal_Middle']]+=am*(1-upper)*glove*.2
+ norm=total.sum(axis=1)
+ if np.any(norm<1e-6):raise ValueError("Unweighted NASA Z-2 suit mesh")
+ total/=norm[:,None]
  # Four GPU influences per vertex; joints selected by non-zero weight.
  ids=np.argsort(total,axis=1)[:,-4:]
  weights=np.take_along_axis(total,ids,axis=1)
@@ -118,26 +123,39 @@ def build(src,decoded,dest):
   ticks=np.linspace(0,duration,count+1,dtype='<f4')
   timeline=acc(ticks,'SCALAR',target=None,bounds=True)
   samplers=[];channels=[]
-  for joint in (6,7,8,9,10,11,12,13,15,16,2,3,5):
+  tracks={}
+  for side in ('L','R'):
+   tracks.update({
+    f'{side}_Femur':'hip',f'{side}_Tibia':'knee',
+    f'{side}_Tarsal_Talus':'ankle',
+    f'{side}_Metatarsal_Middle':'toe',f'{side}_Humerus':'arm',
+    f'{side}_Radius':'elbow',f'{side}_Carpal_Capitate':'wrist',
+    f'{side}_Phalanx_Thumb_Proximal':'finger',
+    f'{side}_Phalanx_Index_Proximal':'finger'})
+  for bone in ('Lumbar_L3','Thoracic_T7','Thoracic_T3','Cervical_C4','Cranium_Frontal'):
+   tracks[bone]='trunk'
+  for nameOfBone,role in tracks.items():
+   joint=boneIndex[nameOfBone]
    samples=[]
    for frame in range(count+1):
     phase=2*math.pi*frame/count
-    offset=0 if joint in (6,7,8,15,16) else math.pi
-    sinus=math.sin(phase+offset)
+    sidePhase=math.pi if nameOfBone.startswith('R_') else 0
+    sinus=math.sin(phase+sidePhase)
     swing=max(0,-sinus)
-    if joint in (6,9):value=amplitude*sinus
-    elif joint in (7,10):value=-amplitude*1.05*swing
-    elif joint in (8,11):value=-amplitude*.12*sinus
-    elif joint in (12,15):value=-amplitude*.65*sinus
-    elif joint in (13,16):value=-amplitude*.18*(.5+swing)
-    elif joint==2:value=amplitude*.055*math.sin(phase*2)
-    elif joint==3:value=amplitude*.08*math.sin(phase+math.pi/2)
-    else:value=amplitude*.025*math.sin(phase)
+    if role=='hip':value=amplitude*sinus
+    elif role=='knee':value=-amplitude*1.1*swing
+    elif role=='ankle':value=-amplitude*.2*sinus
+    elif role=='toe':value=amplitude*.08*swing
+    elif role=='arm':value=-amplitude*.52*sinus
+    elif role=='elbow':value=-amplitude*.12*(.5+swing)
+    elif role=='wrist':value=amplitude*.04*sinus
+    elif role=='finger':value=amplitude*.055*(.5+swing)
+    else:value=amplitude*.04*math.sin(phase*2)
     samples.append(quat_x(value))
    output=acc(np.array(samples,dtype='<f4'),'VEC4',target=None)
-   idx=len(samplers)
+   index=len(samplers)
    samplers.append({'input':timeline,'output':output,'interpolation':'LINEAR'})
-   channels.append({'sampler':idx,'target':{'node':joint+1,'path':'rotation'}})
+   channels.append({'sampler':index,'target':{'node':joint+1,'path':'rotation'}})
   animations.append({'name':name,'samplers':samplers,'channels':channels})
  images=[]
  for im in original['images']:
@@ -160,7 +178,10 @@ def build(src,decoded,dest):
    'joints':list(range(1,len(joints)+1)),'skeleton':1}],
   'animations':animations,'images':images,
   'textures':original['textures'],'samplers':original['samplers'],
-  'extensionsUsed':['EXT_texture_webp','KHR_materials_specular']}
+  'extensionsUsed':['EXT_texture_webp','KHR_materials_specular'],
+  'extras':{'anatomical_bones':206,'axial':80,'appendicular':126,
+   'source':'NASA Z-2 visual geometry; independent educational rig',
+   'surface_skin_weighted_bones':int(np.count_nonzero(np.max(total,axis=0)))}}
  meta=json.dumps(gltf,separators=(',',':'),ensure_ascii=False).encode()
  meta+=b' '*((-len(meta))%4)
  length=12+8+len(meta)+8+len(blob)
@@ -172,7 +193,10 @@ def build(src,decoded,dest):
  print(json.dumps({'source_sha256':EXPECTED,
   'output_sha256':hashlib.sha256(dest.read_bytes()).hexdigest(),
   'vertices':len(pos),'triangles':len(faces)//3,
-  'joints':len(joints),'animations':[a['name'] for a in animations],
+  'joints':len(joints),'axial':80,'appendicular':126,
+  'animated_bones':23,
+  'surface_skin_weighted_bones':int(np.count_nonzero(np.max(total,axis=0))),
+  'animations':[a['name'] for a in animations],
   'bytes':length,'type':'educational modified NASA Z-2 suit'},indent=2))
 if __name__=='__main__':
  if len(sys.argv)!=4:sys.exit('Usage: python scripts/build_motion_asset.py source.glb decoded_dir output.glb')
