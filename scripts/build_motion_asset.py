@@ -99,8 +99,8 @@ def build(src,decoded,dest):
   v=view(np.ascontiguousarray(arr).tobytes(),target)
   rec={'bufferView':v,'componentType':component,'count':len(arr),'type':kind}
   if bounds:
-   rec['min']=np.min(arr,axis=0).astype(float).tolist()
-   rec['max']=np.max(arr,axis=0).astype(float).tolist()
+   rec['min']=np.atleast_1d(np.min(arr,axis=0)).astype(float).tolist()
+   rec['max']=np.atleast_1d(np.max(arr,axis=0)).astype(float).tolist()
   accessors.append(rec)
   return len(accessors)-1
  aPos=acc(pos.astype('<f4'),'VEC3',bounds=True)
