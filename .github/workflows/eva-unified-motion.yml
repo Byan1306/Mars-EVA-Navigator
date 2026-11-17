@@ -75,6 +75,8 @@ jobs:
           assert len(b)<30_000_000
           print('Verified NASA Z-2 visual geometry; 206 anatomical joints, 80 axial and 126 appendicular, three clips')
           PY
+      - name: Independently verify 206 adult bones and GPU skinning
+        run: python scripts/verify_anatomy206.py assets/astronaut_z2_anatomical_206.glb
       - name: Build standalone offline web app with Astra validated CTX
         run: |
           python scripts/build_static_site.py \
@@ -82,7 +84,6 @@ jobs:
             --output _unified/Mars_EVA_Navigator_Unified
       - name: Verify actual WebGL suit and gait in Chrome
         id: browser
-        continue-on-error: true
         timeout-minutes: 5
         run: node tests/unified-browser.test.cjs
       - name: Publish completed runnable Windows-compatible website
@@ -103,11 +104,14 @@ jobs:
             scripts/prepare_astronaut.py
             scripts/decode_nasa_z2.cjs
             scripts/build_motion_asset.py
+            scripts/anatomy206.py
+            scripts/verify_anatomy206.py
             scripts/build_static_site.py
             tests/test_dem.py
             tests/test_prepare_dem.py
             tests/dem-routing.test.cjs
             tests/unified-browser.test.cjs
+            docs/ANATOMY_206.md
             docs/jezero-dem.md
             docs/jezero-dem-verification.json
           if-no-files-found: error
