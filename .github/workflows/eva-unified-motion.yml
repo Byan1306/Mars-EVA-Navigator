@@ -2,9 +2,9 @@ name: Unified NASA science + 206-bone anatomical Z2 astronaut
 
 on:
   push:
-    branches: [feature/mars-eva-unified-motion-science]
+    branches: [feature/mars-eva-unified-motion-science, feature/astronaut-anatomical-206]
   pull_request:
-    branches: [feature/jezero-60km-named-region]
+    branches: [feature/jezero-60km-named-region, feature/mars-eva-unified-motion-science]
   workflow_dispatch:
 
 permissions:
