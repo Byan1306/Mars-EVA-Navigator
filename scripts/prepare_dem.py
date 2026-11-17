@@ -85,6 +85,7 @@ DEFAULT_BBOX = (77.390, 18.425, 77.475, 18.475)
 
 
 def download_dataset(source: str, destination: Path) -> Path:
+    """Official USGS host first; use its public PDS S3 mirror after HTTP blocking."""
     info = USGS_DATASETS[source]
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
@@ -111,6 +112,9 @@ def download_dataset(source: str, destination: Path) -> Path:
                 "source_product": f"usgs_{source}", "source_url": info["url"],
                 "retrieved_url": url, "product_page": info["product_page"], "doi": info["doi"],
                 "sha256": digest, "downloaded_at": datetime.now(timezone.utc).isoformat(),
+                # Retain the release pipeline's original manifest field names.
+                "dataset": source, "origin_url": info["url"], "download_url": url,
+                "size_bytes": received, "source_institution": "USGS Astrogeology Science Center",
                 "attribution": "USGS Astrogeology Science Center; NASA/JPL-Caltech/MSSS (CTX); NASA/JPL-Caltech/University of Arizona (HiRISE)",
                 "authors": "R. L. Fergason, D. M. Galuszka, T. M. Hare, D. M. Mayer, B. L. Redding, E. D. Smith (2020)",
                 "native_resolution_m": info["resolution_m"],

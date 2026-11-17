@@ -1,0 +1,60 @@
+name: Publish Mars EVA Navigator with verified Jezero DEM
+
+# Settings > Pages > Build and deployment > Source: GitHub Actions
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: mars-eva-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install pinned scientific dependencies
+        run: pip install -r requirements.txt
+      - name: Download, validate and resample authentic USGS CTX Jezero heights
+        run: |
+          python scripts/prepare_dem.py --download ctx --export-json \
+            --bbox 77.1605 18.2111 77.6989 18.7211 --size 440 \
+            --output jezero_dem_precomputed.json
+          python scripts/verify_static_dem.py jezero_dem_precomputed.json
+      - name: Build minimal public website (no secrets or raw GeoTIFF)
+        run: python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site
+      # Always provide a portable science demo, even before Pages is enabled.
+      - name: Save verified offline-friendly website as a downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mars-eva-verified-web-demo
+          path: _site
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy verified public website
+        id: deployment
+        uses: actions/deploy-pages@v4

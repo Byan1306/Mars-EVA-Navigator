@@ -55,6 +55,17 @@ def procedencia_dem(path):
                 'detail': 'Archivo local sin manifiesto de descarga verificable.'}
     try:
         record = json.loads(manifest.read_text(encoding='utf-8'))
+        legacy = 'source_product' not in record and 'dataset' in record
+        if legacy:
+            # Earlier releases recorded retrieval URLs but no timestamp. Preserve
+            # that absence instead of fabricating a new download event.
+            record = record | {
+                'source_product': 'usgs_' + record['dataset'],
+                'source_url': record['origin_url'],
+                'retrieved_url': record['download_url'],
+                'attribution': record.get('source_institution'),
+                'downloaded_at': None,
+            }
         product_path = OFFICIAL_DEM_PATHS[record['source_product']]
         source_url = USGS_BASE + product_path
         if record['source_url'] != source_url:
@@ -62,7 +73,7 @@ def procedencia_dem(path):
         retrieved_url = record.get('retrieved_url', source_url)
         if retrieved_url not in (source_url, USGS_MIRROR_BASE + product_path):
             raise ValueError('Unknown retrieval URL')
-        if not record.get('attribution') or not record.get('downloaded_at'):
+        if not record.get('attribution') or (not legacy and not record.get('downloaded_at')):
             raise ValueError('Incomplete provenance')
         if record['source_product'] == 'usgs_ctx' and record['sha256'] != PINNED_CTX_SHA256:
             raise ValueError('CTX content differs from the reviewed official product')
@@ -76,6 +87,7 @@ def procedencia_dem(path):
                                          'checksum_note', 'native_resolution_m') if key in record} | {
         'verified': True, 'retrieved_url': retrieved_url,
         'content_pinned': record['source_product'] == 'usgs_ctx',
+        'download_time_recorded': bool(record.get('downloaded_at')),
         'verification_method': 'official_download_manifest_and_local_sha256',
         'verification_note': 'Hash de integridad local; no es una firma ni un checksum publicado por USGS.',
     }
@@ -245,6 +257,15 @@ def curiosity_panorama_renderer():
     return FileResponse(path, media_type='application/javascript')
 
 
+@app.get('/jezero_dem_precomputed.json', include_in_schema=False)
+def static_science_dem():
+    """Make a locally generated, reviewed JSON available without exposing the GeoTIFF."""
+    path = BASE_DIR / 'jezero_dem_precomputed.json'
+    if not path.is_file():
+        raise HTTPException(404, 'No public precomputed Jezero DEM has been generated.')
+    return FileResponse(path, media_type='application/json')
+
+
 @app.get('/api/status')
 def estado():
     path = None
@@ -255,6 +276,9 @@ def estado():
                 'dem_validated': True, 'provenance_verified': data['provenance']['verified'],
                 'provenance': data['provenance'], 'full_bbox': data['full_bbox'],
                 'source_resolution_m': data['source_resolution_m'],
+                'crs': data['source_crs'], 'source_width': data['source_width'],
+                'source_height': data['source_height'], 'source_resolution': data['source_resolution'],
+                'science_status': 'DEM georreferenciado validado; no certifica seguridad EVA',
                 'source_elevation_stats': data['source_elevation_stats'],
                 'detail': 'GeoTIFF marciano validado; se procesó una malla de comprobación.'}
     except HTTPException as exc:
@@ -322,6 +346,12 @@ def obtener_dem(
             return {
                 'source_file': path.name, 'source_crs': src.crs.to_string(),
                 'provenance': provenance, 'source_elevation_stats': stats,
+                # Compatibility with the existing static science-release builder.
+                'source_url': provenance.get('source_url'),
+                'download_url': provenance.get('retrieved_url'),
+                'source_sha256': provenance.get('sha256'),
+                'source_institution': 'USGS Astrogeology Science Center' if provenance['verified'] else 'Not independently verified; inspect this input GeoTIFF.',
+                'scientific_limitations': 'Measured surface heights resampled to a DEM grid; not rover-verified walking safety, real-time weather, or subcell obstacle detection.',
                 'crs': MARS_LONLAT_CRS, 'coordinate_order': 'longitude, latitude',
                 'elevation_units': 'm', 'units_assumed': not bool(src.units[0]),
                 'pixel_registration': 'area', 'resampling': 'bilinear', 'row_order': 'north_to_south',

@@ -37,6 +37,8 @@ The product name retains `MOLAtopography_DeltaGeoid`. Elevations are in metres a
 
 The 13.47 m north–south grid spacing is **upsampling of a 20 m product**, not new 13.47 m observations. Planning grids may resample it again. The interface distinguishes native resolution, loaded sampling and route-grid spacing. None establishes the absence of smaller obstacles.
 
+The existing science-release workflow separately builds a 440×440 regional export over 77.1605–77.6989°E, 18.2111–18.7211°N. These bounds are rounded inward to avoid silently clipping the source extent. This wider export samples roughly 68 m per cell; it retains 20 m native-source metadata and is distinct from the checked-in 220×220 study crop described above.
+
 JSON uses longitude/latitude in degrees on the Mars sphere, area-registered pixels, row-major north-to-south storage and explicit `grid_transform`. Pixel centres are `(W+(column+0.5)*(E-W)/width, N-(row+0.5)*(N-S)/height)`. NoData becomes `null`; masked cells are not filled or traversed. Entirely invalid rasters, undeclared invalid heights, incompatible CRS/units and invalid provenance are rejected.
 
 ## Reproduce and verify

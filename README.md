@@ -100,7 +100,40 @@ You can also check:
 
 The root [index.html](index.html) redirects to the interactive application. GitHub Pages serves the frontend only; it does not execute the Python backend. A real terrain-dependent route requires a loaded Mars DEM. The app does not substitute invented heights when DEM coverage is unavailable.
 
-Enable GitHub Pages under **Settings → Pages → Deploy from a branch → main / (root)** after merging.
+The existing science-release workflow builds a separate 440×440 regional export for deployment. Enable **Settings → Pages → Source: GitHub Actions**; see the release workflow and `docs/SCIENTIFIC_EVIDENCE.md`. The checked-in 220×220 study crop remains available for direct static hosting and regression tests.
+
+## Mission GENESIS — verified science release
+
+The project now includes a **repeatable USGS Jezero DEM deployment pipeline** and
+**immersive navigation between documented Curiosity photo stations**. The original
+2D EVA planner, three route profiles, NASA Mars Trek maps, evidence panels,
+emergency-return models and local DEM backend remain intact.
+
+- **Scientifically sourced:** download the official USGS Mars 2020 CTX DTM
+  (20 m/pixel) or its public PDS S3 mirror and retain SHA-256/provenance.
+- **Public site:** automatically build a reviewed Jezero 440×440 precomputed
+  elevation JSON (real DEM, coarser resampling) and deploy with GitHub Actions.
+- **Curiosity viewer:** Next/Previous documented panoramas, keyboard arrows and
+  full screen, with explicit labeling of gaps between photographic stations.
+- **Scientific exports:** GeoJSON includes the source DEM identity, original
+  source resolution, checksum when available, validity fraction and limitations.
+- **Safety:** invalid/missing DEM is reported, never replaced silently with
+  fabricated elevations for Jezero mission.
+
+**Portable fallback if GitHub Pages has not been enabled:** open the most recent
+**Publish Mars EVA Navigator with verified Jezero DEM** workflow in Actions,
+download the `mars-eva-verified-web-demo` artifact from its Artifacts section
+and extract the ZIP. From the extracted directory run `python -m http.server
+8080`, then open `http://127.0.0.1:8080/`. The package contains the authentic
+validated DEM JSON; map tiles and NASA imagery still require Internet access.
+
+**One-time site setup:** repository **Settings → Pages → Source → GitHub Actions**.
+The workflow `Publish Mars EVA Navigator with verified Jezero DEM` downloads
+and validates data before publishing. Do not claim the Pages release has real
+terrain until this workflow completes successfully. No credentials are needed
+for the public USGS CTX data.
+
+See [Scientific evidence, limitations, deployment and demo checklist](docs/SCIENTIFIC_EVIDENCE.md).
 
 ### Reproducible Jezero elevations
 

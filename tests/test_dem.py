@@ -74,6 +74,20 @@ class DEMContractTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/status').json()['status'], 'sin_dem')
         self.assertEqual(self.client.get('/api/dem/jezero').status_code, 404)
 
+    def test_legacy_manifest_keeps_unknown_download_time_and_requires_ctx_pin(self):
+        record = {'dataset': 'ctx', 'origin_url': USGS_BASE + OFFICIAL_DEM_PATHS['usgs_ctx'],
+                  'download_url': USGS_MIRROR_BASE + OFFICIAL_DEM_PATHS['usgs_ctx'],
+                  'source_institution': 'USGS Astrogeology Science Center', 'sha256': CTX_SHA256}
+        manifest = Path(str(self.path) + '.provenance.json')
+        manifest.write_text(json.dumps(record))
+        # Isolate manifest migration; an actual fixture cannot match the CTX pin.
+        with patch('mars_dem_server._sha256', return_value=CTX_SHA256):
+            status = self.client.get('/api/status').json()
+        self.assertTrue(status['provenance_verified'])
+        self.assertIsNone(status['provenance']['downloaded_at'])
+        self.assertFalse(status['provenance']['download_time_recorded'])
+        self.assertEqual(self.client.get('/api/dem/jezero').status_code, 422)
+
     def test_real_numeric_bands_mars_crs_and_physical_units_required(self):
         cases = ({'crs': 'EPSG:4326'}, {'count': 3}, {'scale': 0.5}, {'units': 'ft'},
                  {'dtype': 'uint8', 'values': np.ones((40, 40)), 'nodata': 255},

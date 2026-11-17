@@ -452,6 +452,7 @@
     const url=URL.createObjectURL(file);
     state.importUrl=url;
     state.activePano={imported:true,sol:null,image:url};
+    updateStationNavigator();
     text('curiosity-photo-title','Mosaico local experimental · '+file.name);
     text('curiosity-photo-caption','Resultado ensamblado aportado por el usuario. No se ha verificado que cubra 360 grados ni que su cámara tenga una geolocalización exacta. No representa un modelo tridimensional.');
     const source=id('curiosity-photo-source');
@@ -478,6 +479,7 @@
   function showRawPhoto(photo) {
     stopPlayback();
     state.activePano={raw:true,sol:photo.sol,source:photo.url,url:photo.url};
+    updateStationNavigator();
     document.querySelectorAll('.curiosity-panorama-item').forEach(function(b){b.classList.remove('active');});
     text('curiosity-photo-title',(photo.camera||'Cámara NASA')+' · Sol '+(photo.sol??'?'));
     text('curiosity-photo-caption','Fotografía individual original NASA/JPL-Caltech, sin proyección 360° ni coordenadas de cámara verificadas. Para construir un panorama correcto se requieren múltiples tomas solapadas del mismo punto e información de calibración.');
@@ -574,11 +576,72 @@
     img.style.top=((wrap.clientHeight-height)/2)+'px';
     img.style.transform='none';
   }
+  // Documented camera stations are discrete; do not interpolate new panoramas.
+  const NAVIGABLE_PANORAMAS = PANORAMAS.filter(function(p){return Boolean(p.image);});
+
+  function updateStationNavigator() {
+    const counter=id('curiosity-station-counter');
+    const prev=id('curiosity-station-prev');
+    const next=id('curiosity-station-next');
+    if (!counter || !prev || !next) return;
+    const index=state.activePano?.id
+      ? NAVIGABLE_PANORAMAS.findIndex(function(p){return p.id===state.activePano.id;})
+      : -1;
+    prev.disabled=index<=0;
+    next.disabled=index<0 || index===NAVIGABLE_PANORAMAS.length-1;
+    counter.textContent=index<0
+      ? 'Vista individual · sin desplazamiento fotográfico continuo'
+      : 'ESTACIÓN NASA '+(index+1)+' / '+NAVIGABLE_PANORAMAS.length+
+        ' · salto entre panoramas documentados, no imagen continua';
+  }
+
+  function stepDocumentedPanorama(delta) {
+    if (!state.activePano?.id || ![-1,1].includes(delta)) return;
+    const index=NAVIGABLE_PANORAMAS.findIndex(function(p){return p.id===state.activePano.id;});
+    const next=index+delta;
+    if (next>=0 && next<NAVIGABLE_PANORAMAS.length) openPanorama(NAVIGABLE_PANORAMAS[next].id);
+  }
+
+  function installStationNavigator() {
+    const toolbar=document.querySelector('#curiosity-photo-dialog .curiosity-photo-toolbar');
+    if (!toolbar || id('curiosity-station-nav')) return;
+    const section=document.createElement('div');
+    section.id='curiosity-station-nav';
+    section.className='curiosity-station-nav';
+    section.setAttribute('aria-label','Navegación entre panoramas NASA');
+    const prev=document.createElement('button');
+    prev.id='curiosity-station-prev';prev.type='button';
+    prev.textContent='← Estación anterior';
+    prev.addEventListener('click',function(){stepDocumentedPanorama(-1);});
+    const counter=document.createElement('span');
+    counter.id='curiosity-station-counter';
+    counter.setAttribute('aria-live','polite');
+    const next=document.createElement('button');
+    next.id='curiosity-station-next';next.type='button';
+    next.textContent='Estación siguiente →';
+    next.addEventListener('click',function(){stepDocumentedPanorama(1);});
+    const full=document.createElement('button');
+    full.id='curiosity-immersive-fullscreen';full.type='button';
+    full.textContent='⛶ Pantalla completa';
+    full.addEventListener('click',function(){
+      const panel=id('curiosity-photo-dialog');
+      if (document.fullscreenElement===panel) {
+        document.exitFullscreen?.();
+      } else {
+        panel.requestFullscreen?.().catch(function(){});
+      }
+    });
+    section.append(prev,counter,next,full);
+    toolbar.after(section);
+    updateStationNavigator();
+  }
+
   function closePanorama() {
     id('curiosity-photo-dialog').hidden=true;
     id('curiosity-photo-image').removeAttribute('src');
     id('curiosity-photo-image').onload=null;
     state.activePano=null;
+    updateStationNavigator();
     state.dragging=false;
     if(state.pano3d)state.pano3d.disable();
     if(state.importUrl){ URL.revokeObjectURL(state.importUrl);state.importUrl=null; }
@@ -589,6 +652,7 @@
     if (!p) return;
     stopPlayback();
     state.activePano=p;
+    updateStationNavigator();
     if (state.track && p.sol>=state.track.sols[0] && p.sol<=state.track.sols[state.track.sols.length-1]) selectSol(p.sol,true);
     document.querySelectorAll('.curiosity-panorama-item').forEach(function(b){b.classList.toggle('active',b.dataset.panorama===p.id);});
     text('curiosity-photo-title',p.name+' · SOL '+p.sol);
@@ -645,6 +709,7 @@
   function init() {
     if (!id('tab-curiosity') || !id('curiosity-explorer')) return;
     renderPanoList();
+    installStationNavigator();
     if (root.CuriosityPano360) {
       state.pano3d=new root.CuriosityPano360(id('curiosity-photo-canvas'));
     }
@@ -691,6 +756,12 @@
     windowEl.addEventListener('pointercancel',function(){state.dragging=false;});
     root.addEventListener('resize',function(){if(state.activePano)positionPhoto();});
     document.addEventListener('keydown',function(e){
+      if (state.activePano?.id && ['ArrowLeft','ArrowRight'].includes(e.key) &&
+          !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        stepDocumentedPanorama(e.key==='ArrowLeft'?-1:1);
+        return;
+      }
       if (e.key==='Escape' && state.activePano) {closePanorama();e.stopPropagation();}
       else if(e.key==='Escape' && state.overlayOpen) closeExplorer();
     });

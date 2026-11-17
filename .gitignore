@@ -20,5 +20,8 @@ venv/
 *.tif.part
 *.tiff.part
 *.img.part
+
+# Generated static deployment directory
+_site/
 *.tif.provenance.json
 *.tiff.provenance.json
