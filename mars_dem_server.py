@@ -3,14 +3,17 @@ Dependencias: pip install fastapi uvicorn rasterio numpy
 DEM: jezero_hirise_dtm.tif junto a este archivo o variable MARS_DEM_PATH.
 """
 from contextlib import asynccontextmanager
+from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
+import hashlib
+import json
 import math
 import os
 
 import numpy as np
 import rasterio
-from rasterio.warp import reproject, Resampling, transform_bounds
+from rasterio.warp import reproject, Resampling, transform_bounds, transform as transform_coords
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -20,6 +23,74 @@ HTML_NAME = 'mars_eva_navigator_guia_de_supervivencia_interplanetaria_nasa_space
 MARS_RADIUS_M = 3396190.0
 # Spherical geographic coordinates; not falsely advertised as a specific IAU datum.
 MARS_LONLAT_CRS = f'+proj=longlat +R={MARS_RADIUS_M:.0f} +no_defs'
+OFFICIAL_DEM_PATHS = {
+    'usgs_ctx': 'CTX/JEZ_ctx_B_soc_008_DTM_MOLAtopography_DeltaGeoid_20m_Eqc_latTs0_lon0.tif',
+    'usgs_hirise': 'HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif',
+}
+USGS_BASE = 'https://planetarymaps.usgs.gov/mosaic/mars2020_trn/'
+USGS_MIRROR_BASE = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/'
+# Observed bytes of the official CTX download, not a checksum published by USGS.
+PINNED_CTX_SHA256 = '16a1aa66c3f48c1bca252795827db7b417876217aff0f5e1aff18027fab2327b'
+
+
+def _file_key(path):
+    stat = path.stat()
+    return str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
+
+@lru_cache(maxsize=8)
+def _sha256(path, size, mtime_ns, ctime_ns):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as source:
+        for block in iter(lambda: source.read(2 * 1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def procedencia_dem(path):
+    """Verify recorded download provenance; CRS alone never proves authenticity."""
+    manifest = path.with_suffix(path.suffix + '.provenance.json')
+    if not manifest.is_file():
+        return {'verified': False, 'source_url': None, 'attribution': None,
+                'detail': 'Archivo local sin manifiesto de descarga verificable.'}
+    try:
+        record = json.loads(manifest.read_text(encoding='utf-8'))
+        legacy = 'source_product' not in record and 'dataset' in record
+        if legacy:
+            # Earlier releases recorded retrieval URLs but no timestamp. Preserve
+            # that absence instead of fabricating a new download event.
+            record = record | {
+                'source_product': 'usgs_' + record['dataset'],
+                'source_url': record['origin_url'],
+                'retrieved_url': record['download_url'],
+                'attribution': record.get('source_institution'),
+                'downloaded_at': None,
+            }
+        product_path = OFFICIAL_DEM_PATHS[record['source_product']]
+        source_url = USGS_BASE + product_path
+        if record['source_url'] != source_url:
+            raise ValueError('Unknown source URL')
+        retrieved_url = record.get('retrieved_url', source_url)
+        if retrieved_url not in (source_url, USGS_MIRROR_BASE + product_path):
+            raise ValueError('Unknown retrieval URL')
+        if not record.get('attribution') or (not legacy and not record.get('downloaded_at')):
+            raise ValueError('Incomplete provenance')
+        if record['source_product'] == 'usgs_ctx' and record['sha256'] != PINNED_CTX_SHA256:
+            raise ValueError('CTX content differs from the reviewed official product')
+        if record['sha256'] != _sha256(*_file_key(path)):
+            raise ValueError('Checksum mismatch')
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(422, 'Procedencia DEM inválida: comprueba el manifiesto y SHA-256 del GeoTIFF.') from exc
+    return {key: record[key] for key in ('source_url', 'attribution', 'sha256',
+                                         'source_product', 'downloaded_at', 'doi',
+                                         'authors', 'product_page', 'vertical_reference',
+                                         'checksum_note', 'native_resolution_m') if key in record} | {
+        'verified': True, 'retrieved_url': retrieved_url,
+        'content_pinned': record['source_product'] == 'usgs_ctx',
+        'download_time_recorded': bool(record.get('downloaded_at')),
+        'verification_method': 'official_download_manifest_and_local_sha256',
+        'verification_note': 'Hash de integridad local; no es una firma ni un checksum publicado por USGS.',
+    }
 
 
 def encontrar_tif() -> Path:
@@ -43,12 +114,17 @@ def encontrar_tif() -> Path:
 
 
 def validar_raster(src) -> None:
+    if src.driver != 'GTiff':
+        raise HTTPException(422, 'Se requiere un GeoTIFF, no otro formato raster.')
     if src.crs is None:
         raise HTTPException(422, 'El raster no tiene CRS.')
-    if src.count != 1 or src.dtypes[0] in ('uint8', 'int8'):
+    dtype = np.dtype(src.dtypes[0])
+    if src.count != 1 or dtype.kind not in 'iuf' or dtype.itemsize < 2:
         raise HTTPException(422, 'Se requiere un DEM de una banda numérica de más de 8 bits, no una imagen RGB.')
     if src.width < 2 or src.height < 2:
         raise HTTPException(422, 'El DEM debe tener al menos 2 × 2 píxeles.')
+    if not all(math.isfinite(x) for x in src.transform) or src.transform.determinant == 0:
+        raise HTTPException(422, 'La transformación espacial del DEM no es válida.')
     try:
         # Reject terrestrial or unknown bodies before PROJ reprojection.
         from pyproj import CRS as ProjCRS
@@ -71,9 +147,49 @@ def bounds_marcianos(src):
     if b[0] >= 180:
         b[0] -= 360
         b[2] -= 360
-    if not all(math.isfinite(x) for x in b) or b[0] >= b[2] or b[1] >= b[3] or b[0] < -180 or b[2] > 180:
+    if not all(math.isfinite(x) for x in b) or b[0] >= b[2] or b[1] >= b[3] or b[0] < -180 or b[2] > 180 or b[1] < -90 or b[3] > 90:
         raise HTTPException(422, 'Cobertura inválida o cruce del antimeridiano no soportado.')
     return b
+
+
+@lru_cache(maxsize=8)
+def _inspeccionar_dem(path, size, mtime_ns, ctime_ns):
+    """Scan physical heights once per file revision, in bounded memory.
+
+    Reject undeclared sentinels before interpolation can contaminate neighbors.
+    Explicit NoData and raster masks are excluded from the scan.
+    """
+    with rasterio.open(path) as src:
+        validar_raster(src)
+        bounds_marcianos(src)
+        minimum, maximum, count = math.inf, -math.inf, 0
+        for row in range(0, src.height, 256):
+            values = src.read(1, window=rasterio.windows.Window(
+                0, row, src.width, min(256, src.height-row)), masked=True).compressed()
+            if not values.size:
+                continue
+            if not np.isfinite(values).all() or np.any(values < -15000) or np.any(values > 30000):
+                raise HTTPException(422, 'Alturas no físicas o NoData sin declarar; corrige la máscara antes de interpolar.')
+            minimum = min(minimum, float(values.min()))
+            maximum = max(maximum, float(values.max()))
+            count += values.size
+        if not count:
+            raise HTTPException(422, 'El DEM no contiene alturas válidas.')
+        return {'min_m': minimum, 'max_m': maximum, 'valid_cells': int(count),
+                'nodata_cells': int(src.width*src.height-count)}
+
+
+def resolucion_superficie(src, bbox):
+    """Approximate native pixel spacing on the Mars sphere at the crop center."""
+    from pyproj import Geod
+    x, y = transform_coords(MARS_LONLAT_CRS, src.crs,
+                           [(bbox[0]+bbox[2])/2], [(bbox[1]+bbox[3])/2])
+    a = src.transform
+    lon, lat = transform_coords(src.crs, MARS_LONLAT_CRS,
+                               [x[0], x[0]+a.a, x[0]+a.b],
+                               [y[0], y[0]+a.d, y[0]+a.e])
+    geod = Geod(a=MARS_RADIUS_M, b=MARS_RADIUS_M)
+    return [abs(geod.inv(lon[0], lat[0], lon[i], lat[i])[2]) for i in (1, 2)]
 
 
 @asynccontextmanager
@@ -106,7 +222,6 @@ def pagina():
     if not path.is_file():
         raise HTTPException(404, f'Coloca {HTML_NAME} o index.html junto al servidor.')
     return FileResponse(path, media_type='text/html')
-
 
 
 # Only explicitly reviewed public 3D assets are served; no directory traversal.
@@ -208,6 +323,23 @@ def ortho_image():
 def original_eva_planner():
     return FileResponse(BASE_DIR / HTML_NAME, media_type='text/html')
 
+
+@app.get('/astronaut_motion.mjs', include_in_schema=False)
+def motion_genesis_controller():
+    path = BASE_DIR / 'astronaut_motion.mjs'
+    if not path.is_file():
+        raise HTTPException(404, 'Controlador del astronauta no generado.')
+    return FileResponse(path, media_type='text/javascript')
+
+
+@app.get('/assets/astronaut_z2_rigged.glb', include_in_schema=False)
+def verified_motion_suit():
+    path = BASE_DIR / 'assets' / 'astronaut_z2_rigged.glb'
+    if not path.is_file():
+        raise HTTPException(404, 'Ejecuta scripts/build_motion_asset.py para generar el rig educativo.')
+    return FileResponse(path, media_type='model/gltf-binary')
+
+
 # Serve only explicit, public app assets. Do not expose the local DEM, database,
 # credentials or private files with a generic static-directory mount.
 @app.get('/curiosity_explorer.js', include_in_schema=False)
@@ -254,46 +386,48 @@ def static_science_dem():
 
 @app.get('/api/status')
 def estado():
-    """Never report a malformed/terrestrial raster as an active Mars DEM."""
+    path = None
     try:
         path = encontrar_tif()
-        with rasterio.open(path) as src:
-            validar_raster(src)
-            bounds = bounds_marcianos(src)
-            return {
-                'status': 'activo',
-                'tif_detectado': path.name,
-                'crs': src.crs.to_string(),
-                'full_bbox': bounds,
-                'source_width': src.width,
-                'source_height': src.height,
-                'source_resolution': list(src.res),
+        data = obtener_dem(min_lon=None, min_lat=None, max_lon=None, max_lat=None, size=40)
+        return {'status': 'activo', 'tif_detectado': path.name,
+                'dem_validated': True, 'provenance_verified': data['provenance']['verified'],
+                'provenance': data['provenance'], 'full_bbox': data['full_bbox'],
+                'source_resolution_m': data['source_resolution_m'],
+                'crs': data['source_crs'], 'source_width': data['source_width'],
+                'source_height': data['source_height'], 'source_resolution': data['source_resolution'],
                 'science_status': 'DEM georreferenciado validado; no certifica seguridad EVA',
-            }
+                'source_elevation_stats': data['source_elevation_stats'],
+                'detail': 'GeoTIFF marciano validado; se procesó una malla de comprobación.'}
     except HTTPException as exc:
-        status = 'sin_dem' if exc.status_code == 404 else 'dem_invalido'
-        return {'status': status, 'tif_detectado': None, 'detail': exc.detail}
-    except (rasterio.errors.RasterioError, ValueError, OSError) as exc:
-        return {'status': 'dem_invalido', 'tif_detectado': None,
-                'detail': 'El archivo encontrado no supera la validación del DEM.'}
+        return {'status': 'sin_dem' if exc.status_code == 404 else 'dem_invalido',
+                'tif_detectado': path.name if path else None,
+                'dem_validated': False, 'provenance_verified': False, 'detail': exc.detail}
 
 
 @app.get('/api/dem/jezero')
 def obtener_dem(
-    min_lon: Optional[float] = Query(None, ge=-180, le=180),
-    min_lat: Optional[float] = Query(None, ge=-90, le=90),
-    max_lon: Optional[float] = Query(None, ge=-180, le=180),
-    max_lat: Optional[float] = Query(None, ge=-90, le=90),
-    size: int = Query(110, ge=40, le=440),
+    min_lon: Annotated[Optional[float], Query(ge=-180, le=180)] = None,
+    min_lat: Annotated[Optional[float], Query(ge=-90, le=90)] = None,
+    max_lon: Annotated[Optional[float], Query(ge=-180, le=180)] = None,
+    max_lat: Annotated[Optional[float], Query(ge=-90, le=90)] = None,
+    size: Annotated[int, Query(ge=40, le=440)] = 110,
 ):
+    # The preparation CLI calls this function directly, bypassing FastAPI Query validation.
+    if not isinstance(size, int) or isinstance(size, bool) or not 40 <= size <= 440:
+        raise HTTPException(422, 'size debe ser un entero entre 40 y 440.')
     requested = (min_lon, min_lat, max_lon, max_lat)
     if any(v is not None for v in requested):
         if not all(v is not None and math.isfinite(v) for v in requested):
             raise HTTPException(422, 'Envía los cuatro límites finitos del recorte.')
         if min_lon >= max_lon or min_lat >= max_lat:
             raise HTTPException(422, 'Los mínimos deben ser menores que los máximos.')
+        if not (-180 <= min_lon < max_lon <= 180 and -90 <= min_lat < max_lat <= 90):
+            raise HTTPException(422, 'Coordenadas fuera del rango de longitud/latitud.')
     path = encontrar_tif()
     try:
+        stats = _inspeccionar_dem(*_file_key(path))
+        provenance = procedencia_dem(path)
         with rasterio.open(path) as src:
             validar_raster(src)
             full = bounds_marcianos(src)
@@ -320,32 +454,46 @@ def obtener_dem(
             m_per_deg = math.pi * MARS_RADIUS_M / 180
             cell_x = (bbox[2]-bbox[0])/size*m_per_deg*math.cos(math.radians((bbox[1]+bbox[3])/2))
             cell_y = (bbox[3]-bbox[1])/size*m_per_deg
-            source_projected = src.crs.is_projected
-            source_resolution_m = [value * src.crs.linear_units_factor[1] for value in src.res] if source_projected else [
-                abs(src.res[0])*m_per_deg*math.cos(math.radians((bbox[1]+bbox[3])/2)),
-                abs(src.res[1])*m_per_deg,
-            ]
+            source_resolution_m = [value * src.crs.linear_units_factor[1] for value in src.res] if src.crs.is_projected else None
+            source_ground_resolution_m = resolucion_superficie(src, bbox)
             # Resolution is sampling spacing, not a guarantee of obstacle detection.
-            downsample = max(cell_x/max(source_resolution_m[0],1e-9), cell_y/max(source_resolution_m[1],1e-9))
+            sampling_ratios = [cell_x/source_ground_resolution_m[0], cell_y/source_ground_resolution_m[1]]
+            downsample = max(sampling_ratios)
+            requested_covered = min_lon is None or all(
+                abs(a-b) < 1e-10 for a, b in zip(requested, bbox))
             return {
                 'source_file': path.name, 'source_crs': src.crs.to_string(),
+                'provenance': provenance, 'source_elevation_stats': stats,
+                # Compatibility with the existing static science-release builder.
+                'source_url': provenance.get('source_url'),
+                'download_url': provenance.get('retrieved_url'),
+                'source_sha256': provenance.get('sha256'),
+                'source_institution': 'USGS Astrogeology Science Center' if provenance['verified'] else 'Not independently verified; inspect this input GeoTIFF.',
+                'scientific_limitations': 'Measured surface heights resampled to a DEM grid; not rover-verified walking safety, real-time weather, or subcell obstacle detection.',
                 'crs': MARS_LONLAT_CRS, 'coordinate_order': 'longitude, latitude',
                 'elevation_units': 'm', 'units_assumed': not bool(src.units[0]),
-                'pixel_registration': 'area', 'resampling': 'bilinear',
+                'pixel_registration': 'area', 'resampling': 'bilinear', 'row_order': 'north_to_south',
+                'grid_origin': 'upper_left', 'nodata_representation': 'null',
+                'grid_transform': list(transform)[:6],
                 'source_width': src.width, 'source_height': src.height,
                 'source_resolution': list(src.res),
-                'source_resolution_m_approx': source_resolution_m,
+                'source_resolution_m': source_resolution_m,
+                'source_resolution_m_approx': source_ground_resolution_m,
                 'downsampling_factor_approx': downsample,
+                'sampling_ratio_xy': sampling_ratios,
+                'upsampled': any(ratio < 1 for ratio in sampling_ratios),
                 'resolution_note': 'La malla puede omitir obstáculos subcelda; interpolar no añade detalle.',
                 'requested_bbox': list(requested) if min_lon is not None else None,
+                'requested_bbox_fully_covered': requested_covered,
                 'width': size, 'height': size, 'bbox': bbox, 'full_bbox': full,
                 'cell_size_m': (cell_x+cell_y)/2, 'cell_size_x_m': cell_x, 'cell_size_y_m': cell_y,
                 'valid_fraction': float(valid.mean()), 'nodata_cells': int((~valid).sum()),
+                'elevation_min_m': float(dst[valid].min()), 'elevation_max_m': float(dst[valid].max()),
                 'elevations': [float(v) if np.isfinite(v) else None for v in dst.ravel()],
             }
     except HTTPException:
         raise
-    except (rasterio.errors.RasterioError, ValueError) as exc:
+    except (rasterio.errors.RasterioError, ValueError, OSError) as exc:
         raise HTTPException(422, 'No se pudo leer o reproyectar el DEM. Comprueba CRS, banda y archivo.') from exc
 
 

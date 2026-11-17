@@ -31,7 +31,7 @@ jobs:
           node --check open_world_visuals.mjs
           node --check open_world_core.js
           node --test tests/open-world-core.test.cjs
-          node --test tests/curiosity.test.cjs tests/curiosity-mission-control.test.cjs
+          node --test tests/curiosity*.test.cjs tests/dem-routing.test.cjs tests/open-world-core.test.cjs
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
       - name: Check Python compilation
@@ -57,7 +57,7 @@ jobs:
       - name: Produce authentic USGS Jezero DEM artifact
         run: |
           python scripts/prepare_dem.py --download ctx --export-json \
-            --bbox 77.1605 18.211 77.699 18.7212 --size 440 \
+            --bbox 77.1605 18.2111 77.6989 18.7211 --size 440 \
             --output jezero_dem_precomputed.json
           python scripts/verify_static_dem.py jezero_dem_precomputed.json
       - name: Optional registered NASA/USGS CTX orbital photography
@@ -66,6 +66,10 @@ jobs:
       - name: Include official NASA Z-2 astronaut
         continue-on-error: true
         run: python scripts/prepare_astronaut.py
+      - name: Build independently animated NASA Z-2 suit
+        run: |
+          node scripts/decode_nasa_z2.cjs assets/astronaut_z2.glb node_modules/three/examples/jsm/libs/draco/draco_decoder.js _motion_raw
+          python scripts/build_motion_asset.py assets/astronaut_z2.glb _motion_raw assets/astronaut_z2_rigged.glb
       - name: Bundle preview with local Three.js
         run: |
           python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site
