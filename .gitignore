@@ -20,3 +20,5 @@ venv/
 *.tif.part
 *.tiff.part
 *.img.part
+*.tif.provenance.json
+*.tiff.provenance.json

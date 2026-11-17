@@ -913,7 +913,7 @@
         </div>
 
         <div class="dem-source-tag" id="dem-source-banner">
-          FUENTE DEM: Pendiente de carga; exploración sintética si falta el archivo.
+          FUENTE DEM: Pendiente de carga. Sin DEM no se calculan rutas.
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.38rem;">
@@ -1680,7 +1680,7 @@
 
     // =========================================================================
     // =========================================================================
-    // 5. CARGA DEL .TIF REAL Y GENERADOR TOPOGRÁFICO DETERMINISTA UNIFORME
+    // 5. CARGA Y VALIDACIÓN DEL DEM; DEMOSTRACIÓN EXPLÍCITA SOLO EN EXPLORADOR
     // =========================================================================
     function fetchWithTimeout(url, timeoutMs = 15000, options = {}) {
       const controller = new AbortController();
@@ -1688,15 +1688,32 @@
       return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
     }
 
-    function applyLoadedTifDataset(data, sourceLabel, update = true) {
+    function validateDemPayload(data, sourceLabel) {
+      if (!data || typeof data !== 'object') throw new Error('Respuesta DEM inválida.');
+      // Coordinates and units are a contract, not inferred from the filename or endpoint.
+      if (data.elevation_units !== 'm' || data.coordinate_order !== 'longitude, latitude' ||
+          data.pixel_registration !== 'area' || data.row_order !== 'north_to_south' ||
+          typeof data.crs !== 'string' || !/\+proj=longlat(?:\s|$)/.test(data.crs) ||
+          !/\+R=3396190(?:\.0+)?(?:\s|$)/.test(data.crs)) {
+        throw new Error('El DEM requiere coordenadas marcianas R=3396190 m, filas norte-sur y alturas en metros.');
+      }
+      if (!Number.isFinite(data.cell_size_m) || data.cell_size_m <= 0) {
+        throw new Error('La separación de la malla debe ser positiva y finita.');
+      }
+      for (const spacing of [data.source_resolution_m, data.source_resolution_m_approx]) {
+        if (spacing != null && (!Array.isArray(spacing) || spacing.length !== 2 || !spacing.every(v => Number.isFinite(v) && v > 0))) {
+          throw new Error('La resolución original del DEM es inválida.');
+        }
+      }
       if (!Number.isInteger(data.width) || !Number.isInteger(data.height) || data.width < 2 || data.height < 2 || data.width > 2048 || data.height > 2048 ||
           !Array.isArray(data.elevations) || data.elevations.length !== data.width * data.height ||
           !Array.isArray(data.bbox) || data.bbox.length !== 4 || !data.bbox.every(Number.isFinite) ||
-          data.bbox[0] >= data.bbox[2] || data.bbox[1] >= data.bbox[3] || data.bbox[1] < -90 || data.bbox[3] > 90) {
+          data.bbox[0] >= data.bbox[2] || data.bbox[1] >= data.bbox[3] || data.bbox[1] < -90 || data.bbox[3] > 90 || data.bbox[0] < -180 || data.bbox[2] > 180) {
         throw new Error('Dimensiones, elevaciones o cobertura DEM inválidas.');
       }
       const full = data.full_bbox || data.bbox;
       if (!Array.isArray(full) || full.length !== 4 || !full.every(Number.isFinite) ||
+          full[0] < -180 || full[2] > 180 || full[1] < -90 || full[3] > 90 ||
           full[0] > data.bbox[0] || full[1] > data.bbox[1] || full[2] < data.bbox[2] || full[3] < data.bbox[3]) {
         throw new Error('La cobertura completa no contiene el recorte.');
       }
@@ -1712,18 +1729,26 @@
         if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 1e6) {
           elevArr[i] = Number(v);
           validCount++;
-        } else {
+        } else if (v === null) {
           elevArr[i] = NaN;
+        } else {
+          throw new Error('Elevación inválida: NoData debe representarse como null.');
         }
       }
-      if (validCount === 0) {
-        document.getElementById('tif-status-detail').textContent =
-          `Rechazado: "${sourceLabel}" no contiene ninguna elevación válida.`;
-        throw new Error('El DEM no contiene datos válidos.');
-      }
+      if (validCount === 0) throw new Error('El DEM no contiene datos válidos.');
       const validFraction = validCount / (w * h);
-
-      APP.tifDem = {
+      if ((data.nodata_cells != null && data.nodata_cells !== w * h - validCount) ||
+          (data.valid_fraction != null && (!Number.isFinite(data.valid_fraction) || Math.abs(data.valid_fraction - validFraction) > 1e-8))) {
+        throw new Error('Los contadores de cobertura no coinciden con las elevaciones.');
+      }
+      const provenance = data.provenance || { verified: false };
+      if (provenance.verified === true &&
+          (!/^https:\/\/planetarymaps\.usgs\.gov\//.test(provenance.source_url || '') ||
+           !/^[a-f0-9]{64}$/i.test(provenance.sha256 || '') ||
+           !['usgs_ctx', 'usgs_hirise'].includes(provenance.source_product) || !provenance.attribution)) {
+        throw new Error('La procedencia verificada requiere producto, URL USGS, atribución y SHA-256.');
+      }
+      return {
         sourceName: sourceLabel,
         width: w,
         height: h,
@@ -1731,11 +1756,26 @@
         fullBbox: data.full_bbox || data.bbox,
         elevations: elevArr,
         validFraction,
-        cellSizeM: Number(data.cell_size_m) || 25,
-        sourceResolutionM: data.source_resolution_m_approx || null,
+        cellSizeM: data.cell_size_m,
+        sourceResolutionM: data.source_resolution_m || null,
+        sourceGroundResolutionM: data.source_resolution_m_approx || null,
+        provenance: { ...provenance, verified: provenance.verified === true },
+        sourceCrs: data.source_crs || null,
         downsampling: Number(data.downsampling_factor_approx) || null
       };
+    }
 
+    function demSourceDescription(tif = APP.tifDem) {
+      if (!tif) return 'DEM pendiente';
+      const native = tif.sourceResolutionM ? tif.sourceResolutionM.map(v => v.toFixed(1)).join(' × ') + ' m/píxel' : 'resolución original no documentada';
+      const origin = tif.provenance.verified ? tif.provenance.attribution : 'procedencia sin verificar';
+      return `${tif.sourceName} · ${native} · ${origin}`;
+    }
+
+    function applyLoadedTifDataset(data, sourceLabel, update = true) {
+      const dataset = validateDemPayload(data, sourceLabel);
+      APP.tifDem = dataset;
+      const { width: w, height: h, validFraction } = dataset;
       if (tifFootprintRect) map.removeLayer(tifFootprintRect);
       const [minLon, minLat, maxLon, maxLat] = data.bbox;
       tifFootprintRect = L.rectangle([[minLat, minLon], [maxLat, maxLon]], {
@@ -1744,11 +1784,11 @@
         dashArray: '6, 4',
         fillOpacity: 0.04
       })
-        .bindTooltip(`Huella GeoTIFF Real: ${sourceLabel}`, { direction: 'top' })
+        .bindTooltip(`Cobertura DEM: ${sourceLabel}`, { direction: 'top' })
         .addTo(map);
 
       document.getElementById('tif-status-detail').textContent =
-        `Activo: ${sourceLabel} (${w}×${h} celdas • ${(validFraction * 100).toFixed(1)}% con dato • huella [${minLat.toFixed(2)}°..${maxLat.toFixed(2)}° N, ${minLon.toFixed(2)}°..${maxLon.toFixed(2)}° E])`;
+        `Cargado: ${demSourceDescription()} (${w}×${h} celdas • ${(validFraction * 100).toFixed(1)}% con dato • huella [${minLat.toFixed(2)}°..${maxLat.toFixed(2)}° N, ${minLon.toFixed(2)}°..${maxLon.toFixed(2)}° E])`;
 
       if (update) onMissionUpdated();
     }
@@ -1758,30 +1798,70 @@
       if (!silent) detailEl.textContent = 'Conectando con backend Python (.tif) o JSON preprocesado...';
 
       const endpoints = [
-        { url: './api/dem/jezero', label: 'Backend Python (USGS .TIF)' },
+        { url: './api/dem/jezero', label: 'Backend Python (.TIF)' },
         { url: 'http://127.0.0.1:8000/api/dem/jezero', label: 'Backend Python 127.0.0.1:8000 (.TIF)' },
         { url: 'http://localhost:8000/api/dem/jezero', label: 'Backend Python localhost:8000 (.TIF)' },
-        { url: './jezero_dem_precomputed.json', label: 'jezero_dem_precomputed.json (USGS .TIF)' }
+        { url: './jezero_dem_precomputed.json', label: 'jezero_dem_precomputed.json' }
       ];
 
+      const failures = [];
       for (const ep of endpoints) {
         try {
           const res = await fetchWithTimeout(ep.url, 15000);
-          if (!res.ok) continue;
+          if (!res.ok) {
+            let detail = '';
+            try { detail = (await res.json()).detail || ''; } catch (_) {}
+            throw new Error(detail || `HTTP ${res.status}`);
+          }
           const json = await res.json();
           if (json && Array.isArray(json.elevations) && json.elevations.length > 0 && Array.isArray(json.bbox)) {
             const name = json.source_file ? `${json.source_file} (${ep.label})` : ep.label;
+            // Validate before changing the current backend or planning state.
+            validateDemPayload(json, name);
             APP.backendUrl = ep.url.includes("/api/dem/") ? ep.url : null;
             applyLoadedTifDataset(json, name);
             return true;
           }
-        } catch (_) {}
+          throw new Error('La respuesta no contiene una malla de elevaciones.');
+        } catch (err) { failures.push(`${ep.label}: ${err.message}`); }
       }
 
-      if (!silent) {
-        detailEl.textContent = 'No se detectó servidor en puerto 8000. Inicia mars_dem_server.py o abre tu .tif local.';
-      }
+      detailEl.textContent = 'No se cargó un DEM válido. ' + failures.join(' · ');
       return false;
+    }
+
+    function validateBrowserGeoTiff(image, geoKeys, imageCount = 1) {
+      // This path cannot reproject, rotate or normalize physical units. Require the
+      // same grid convention as the API; unsupported TIFFs go through Python.
+      const radius = Number(geoKeys.GeogSemiMajorAxisGeoKey);
+      const minor = Number(geoKeys.GeogSemiMinorAxisGeoKey || radius);
+      if (geoKeys.GTModelTypeGeoKey !== 2 || Math.abs(radius - MARS_RADIUS_M) > .01 ||
+          !Number.isFinite(radius) || Math.abs(minor - radius) > .01) {
+        throw new Error('Se requiere la esfera marciana R=3396190 m. Reproyecta el GeoTIFF con mars_dem_server.py.');
+      }
+      if (geoKeys.GeogAngularUnitsGeoKey != null && geoKeys.GeogAngularUnitsGeoKey !== 9102) {
+        throw new Error('Las coordenadas geográficas deben estar en grados. Usa el procesador Python.');
+      }
+      const resolution = image.getResolution();
+      const directory = image.getFileDirectory();
+      if (imageCount !== 1 || directory.SubIFDs || directory[330] || (Number(directory.NewSubfileType || 0) & 4)) {
+        throw new Error('Los TIFF con máscaras internas o imágenes adicionales requieren el procesador Python para conservar NoData.');
+      }
+      if (!(resolution[0] > 0 && resolution[1] < 0) || directory.ModelTransformation ||
+          (geoKeys.GTRasterTypeGeoKey != null && geoKeys.GTRasterTypeGeoKey !== 1)) {
+        throw new Error('El navegador requiere píxeles de área y una malla norte-arriba sin rotación. Usa el procesador Python.');
+      }
+      const metadata = { ...(image.getGDALMetadata?.() || {}), ...(image.getGDALMetadata?.(0) || {}) };
+      const band = Object.fromEntries(Object.entries(metadata).map(([key,value]) => [key.toLowerCase(),value]));
+      if ((band.scale != null && Number(band.scale) !== 1) || (band.offset != null && Number(band.offset) !== 0)) {
+        throw new Error('El DEM usa escala/offset; convierte las alturas a metros con el procesador Python.');
+      }
+      const units = String(band.unittype || band.units || '').toLowerCase();
+      if ((units && !['m','meter','metre','meters','metres'].includes(units)) ||
+          (geoKeys.VerticalUnitsGeoKey != null && geoKeys.VerticalUnitsGeoKey !== 9001) ||
+          (!units && geoKeys.VerticalUnitsGeoKey !== 9001)) {
+        throw new Error('No se verificaron alturas en metros. Valida las unidades con el procesador Python.');
+      }
     }
 
     async function handleLocalGeoTiffUpload(file) {
@@ -1800,11 +1880,10 @@
         // (1) Debe ser un DEM de una sola banda: nunca interpretar canales de color como elevación.
         const spp = image.getSamplesPerPixel();
         const bits = image.getBitsPerSample ? image.getBitsPerSample(0) : 32;
-        const fmt = image.getSampleFormat ? image.getSampleFormat(0) : 3;
         if (spp !== 1) {
           throw new Error(`el archivo tiene ${spp} bandas; se requiere un DEM de 1 banda (¿es una imagen RGB?).`);
         }
-        if (fmt === 1 && bits <= 8) {
+        if (bits <= 8) {
           throw new Error('el archivo es de 8 bits sin signo (imagen), no un DEM de elevación.');
         }
 
@@ -1821,12 +1900,7 @@
         if (isProjected || !looksGeographic) {
           throw new Error('el GeoTIFF está en un CRS proyectado o sin georreferencia geográfica; reproyéctalo con mars_dem_server.py.');
         }
-        const geoLabel = [geoKeys.GeogCitationGeoKey, geoKeys.GTCitationGeoKey].join(' ').toLowerCase();
-        const radius = Number(geoKeys.GeogSemiMajorAxisGeoKey);
-        if (geoKeys.GTModelTypeGeoKey !== 2 ||
-            !(geoLabel.includes('mars') || (radius > 3300000 && radius < 3500000))) {
-          throw new Error('No se pudo verificar un CRS geográfico marciano. Usa el servidor Python para validar y reproyectar el archivo.');
-        }
+        validateBrowserGeoTiff(image, geoKeys, await tiff.getImageCount());
         let bbox = [...bboxRaw];
         if (bbox[0] >= 180) { bbox[0] -= 360; bbox[2] -= 360; }
 
@@ -1849,11 +1923,17 @@
         }
 
         const midLatRad = ((bbox[1] + bbox[3]) / 2) * DEG_TO_RAD;
-        const cellSizeM = ((bbox[2] - bbox[0]) / targetSize) * (DEG_TO_RAD * planetRadius()) * Math.cos(midLatRad);
+        const cellSizeM = ((bbox[2] - bbox[0]) / targetSize) * (DEG_TO_RAD * MARS_RADIUS_M) * Math.cos(midLatRad);
 
         APP.backendUrl = null;
         applyLoadedTifDataset(
-          { width: targetSize, height: targetSize, bbox, cell_size_m: cellSizeM, elevations },
+          { width: targetSize, height: targetSize, bbox, cell_size_m: cellSizeM, elevations,
+            crs: '+proj=longlat +R=3396190 +no_defs', coordinate_order: 'longitude, latitude',
+            elevation_units: 'm', pixel_registration: 'area', row_order: 'north_to_south',
+            provenance: {verified: false, source_product: 'user_supplied'},
+            source_resolution_m_approx: [
+              (bbox[2]-bbox[0])/origW*DEG_TO_RAD*MARS_RADIUS_M*Math.cos(midLatRad),
+              (bbox[3]-bbox[1])/origH*DEG_TO_RAD*MARS_RADIUS_M] },
           `${file.name} (${origW}×${origH} px → ${targetSize}×${targetSize})`
         );
       } catch (err) {
@@ -1876,6 +1956,7 @@
 
     function sampleTifElevationBilinear(lat, lon) {
       const tif = APP.tifDem;
+      if (!tif || !Number.isFinite(lat) || !Number.isFinite(lon) || !isPointInsideTif(lat, lon)) return NaN;
       const [minLon, minLat, maxLon, maxLat] = tif.bbox;
       const u = Math.max(0, Math.min(tif.width - 1, ((lon - minLon) / (maxLon - minLon)) * tif.width - 0.5));
       const v = Math.max(0, Math.min(tif.height - 1, ((maxLat - lat) / (maxLat - minLat)) * tif.height - 0.5));
@@ -2000,12 +2081,18 @@
     // =========================================================================
     // 6. MALLA DEM DINÁMICA 110x110 + ANÁLISIS GEOMÉTRICO + MOTOR DE RUTAS 3D
     // =========================================================================
+    function availableDemBounds() {
+      // A static JSON only contains its crop; full_bbox describes the source raster,
+      // and can only be requested when the live backend is available.
+      return APP.backendUrl ? APP.tifDem.fullBbox : APP.tifDem.bbox;
+    }
+
     function planningWindow() {
       const [oLat, oLon] = APP.origLatLng;
       const [dLat, dLon] = APP.destLatLng;
 
       if(APP.searchExtent==='full' && APP.tifDem){
-        const [minLon,minLat,maxLon,maxLat]=APP.tifDem.fullBbox;
+        const [minLon,minLat,maxLon,maxLat]=availableDemBounds();
         const cosMid=Math.max(.15,Math.cos((minLat+maxLat)/2*DEG_TO_RAD));
         return {minLat,maxLat,minLon,maxLon,cosMid,oLat,oLon,dLat,dLon};
       }
@@ -2023,7 +2110,7 @@
       let maxLon = Math.min(179.9, midLon + spanLon / 2);
 
       if (APP.tifDem && !APP.demoTerrain) {
-        const b = APP.tifDem.fullBbox;
+        const b = availableDemBounds();
         minLon = Math.max(minLon, b[0]); minLat = Math.max(minLat, b[1]);
         maxLon = Math.min(maxLon, b[2]); maxLat = Math.min(maxLat, b[3]);
       }
@@ -2031,6 +2118,7 @@
     }
 
     function buildDynamicDem() {
+      if (APP.section === 'jezero') APP.demoTerrain = false;
       const {minLat, maxLat, minLon, maxLon, cosMid, oLat, oLon, dLat, dLon} = planningWindow();
       const dxM = ((maxLon - minLon) / GRID_N) * (DEG_TO_RAD * planetRadius()) * cosMid;
       const dyM = ((maxLat - minLat) / GRID_N) * (DEG_TO_RAD * planetRadius());
@@ -2048,9 +2136,9 @@
 
       if (bothInsideTif) {
         bannerEl.className = 'dem-source-tag tif-active';
-        bannerEl.textContent = `FUENTE DEM: Archivo .TIF Real (${APP.tifDem.sourceName})`;
-        hdrDot.className = 'dot';
-        hdrLbl.textContent = `DEM real · malla ${cellSizeM.toFixed(1)} m · entrada ${APP.tifDem.cellSizeM.toFixed(1)} m`;
+        bannerEl.textContent = `FUENTE DEM: ${demSourceDescription()}. Interpolar no añade detalle.`;
+        hdrDot.className = APP.tifDem.provenance.verified ? 'dot' : 'dot amber';
+        hdrLbl.textContent = `DEM ${APP.tifDem.provenance.verified ? 'USGS verificado' : 'aportado, procedencia sin verificar'} · malla ${cellSizeM.toFixed(1)} m`;
       } else if (APP.isAnalogEarth) {
         bannerEl.className = 'dem-source-tag';
         bannerEl.textContent = 'FUENTE DEM: Terreno terrestre SINTÉTICO (no descargado)';
@@ -2877,7 +2965,7 @@
       if(jezero)APP.demoTerrain=false;
       if(!APP.demoTerrain){
         if(!APP.tifDem){clearPlanning('Mapa disponible, rutas pendientes: carga el DEM real de esta zona. La imagen satelital no contiene alturas.');return;}
-        const b=APP.tifDem.fullBbox;
+        const b=availableDemBounds();
         const inside=p=>p.every(Number.isFinite)&&p[1]>=b[0]&&p[1]<=b[2]&&p[0]>=b[1]&&p[0]<=b[3];
         if(![APP.origLatLng,APP.destLatLng].every(inside)){
           clearPlanning('Los puntos están fuera de la cobertura del DEM. No se calculan rutas reales sobre terreno inventado. Mueve los puntos dentro del rectángulo del DEM.');return;
@@ -2920,7 +3008,7 @@
       if(request!==APP.requestId)return;
       const valid=Object.values(APP.routes).filter(r=>r?.executable).length;
       const real=APP.activeDem?.bothInsideTif;
-      const source=real?'DEM real':'DEM SINTÉTICO: las rutas NO corresponden a los cráteres de la imagen';
+      const source=real?demSourceDescription():'DEM SINTÉTICO: las rutas NO corresponden a los cráteres de la imagen';
       const message=`${valid}/3 perfiles con camino. ${source}. Malla ${GRID_N}×${GRID_N}, ${APP.activeDem?.cellSizeM.toFixed(1)} m/celda. ${APP.routes.green?.reason||''} Obstáculos menores que una celda pueden no detectarse.`;
       document.getElementById('route-search-status').textContent=message;
       document.getElementById('mission-status').textContent=message;
@@ -3246,6 +3334,9 @@
         prototype: true,
         section: APP.section,
         dem_source: document.getElementById('dem-source-banner').textContent,
+        dem_provenance: APP.activeDem?.bothInsideTif ? APP.tifDem.provenance : null,
+        dem_source_resolution_m: APP.activeDem?.bothInsideTif ? APP.tifDem.sourceResolutionM : null,
+        dem_grid_spacing_m: APP.activeDem ? [APP.activeDem.dxM, APP.activeDem.dyM] : null,
         coordinate_reference: APP.isAnalogEarth ? 'Earth sphere R=6371008.8m, lon/lat' : 'Mars sphere R=3396190m, lon/lat',
         name: 'MARS_EVA_NAVIGATOR_ROUTES_IAU_2015_49900',
         features
@@ -3545,7 +3636,7 @@
       document.getElementById('tab-explorer').onclick = () => switchSection('explorer');
       document.getElementById('tab-jezero').onclick = () => switchSection('jezero');
       document.getElementById('mission-fit').onclick = () => {
-        if (APP.tifDem) { const b=APP.tifDem.fullBbox; map.fitBounds([[b[1],b[0]],[b[3],b[2]]]); }
+        if (APP.tifDem) { const b=availableDemBounds(); map.fitBounds([[b[1],b[0]],[b[3],b[2]]]); }
       };
       ['mission-budget','mission-science'].forEach(id=>document.getElementById(id).addEventListener('input',renderMissionSummary));
 
