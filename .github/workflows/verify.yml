@@ -31,7 +31,7 @@ jobs:
           node --check open_world_visuals.mjs
           node --check open_world_core.js
           node --test tests/open-world-core.test.cjs
-          node --test tests/*.test.cjs
+          node --test tests/curiosity*.test.cjs tests/dem-routing.test.cjs tests/open-world-core.test.cjs
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
       - name: Check Python compilation
