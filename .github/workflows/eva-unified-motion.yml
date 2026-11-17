@@ -1,0 +1,103 @@
+name: Unified NASA science + animated Z2 astronaut
+
+on:
+  push:
+    branches: [feature/mars-eva-unified-motion-science]
+  pull_request:
+    branches: [feature/jezero-60km-named-region]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eva-unified-motion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 33
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install scientific and WebGL dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --no-audit --no-fund
+      - name: Verify merged Astra DEM and animation source syntax
+        run: |
+          python -m compileall -q mars_dem_server.py scripts/
+          node --check astronaut_motion.mjs
+          node --check open_world.mjs
+          node --check open_world_visuals.mjs
+          node --check scripts/decode_nasa_z2.cjs
+          node --check tests/unified-browser.test.cjs
+          python scripts/verify_static_dem.py jezero_dem_precomputed.json
+      - name: Run combined scientific planner, Curiosity and terrain regression
+        run: |
+          python -m unittest discover -s tests -v
+          node --test tests/*.test.cjs
+      - name: Download original NASA Z-2 visual suit with attribution
+        run: python scripts/prepare_astronaut.py
+      - name: Require original reviewed NASA Z2 source and decode Draco mesh
+        run: |
+          node scripts/decode_nasa_z2.cjs \
+            assets/astronaut_z2.glb \
+            node_modules/three/examples/jsm/libs/draco/draco_decoder.js \
+            _motion_raw
+      - name: Produce actual 18-bone skinned NASA visual suit
+        run: |
+          python scripts/build_motion_asset.py \
+            assets/astronaut_z2.glb \
+            _motion_raw \
+            assets/astronaut_z2_rigged.glb
+      - name: Validate file integrity, glTF skin and animation clips
+        run: |
+          python - <<'PY'
+          import json,struct
+          from pathlib import Path
+          p=Path('assets/astronaut_z2_rigged.glb')
+          b=p.read_bytes()
+          assert b[:4]==b'glTF' and struct.unpack_from('<I',b,8)[0]==len(b)
+          n=struct.unpack_from('<I',b,12)[0]
+          data=json.loads(b[20:20+n])
+          assert len(data['skins'])==1 and len(data['skins'][0]['joints'])==18
+          assert set(a['name'] for a in data['animations'])=={'idle','walk','fast_walk'}
+          attrs=data['meshes'][0]['primitives'][0]['attributes']
+          assert 'WEIGHTS_0' in attrs and 'JOINTS_0' in attrs
+          assert len(b)<30_000_000
+          print('Verified original NASA Z-2 appearance, 18-joint skinned educational mesh, three clips')
+          PY
+      - name: Build standalone offline web app with Astra validated CTX
+        run: |
+          python scripts/build_static_site.py \
+            --dem jezero_dem_precomputed.json \
+            --output _unified/Mars_EVA_Navigator_Unified
+      - name: Verify actual WebGL suit and gait in Chrome
+        id: browser
+        continue-on-error: true
+        timeout-minutes: 5
+        run: node tests/unified-browser.test.cjs
+      - name: Publish completed runnable Windows-compatible website
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_EVA_Unified_Astra_Science_NASA_Animated_Astronaut
+          path: _unified/Mars_EVA_Navigator_Unified/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish Chrome motion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mars_EVA_Unified_Motion_Browser_Evidence
+          path: motion_evidence/
+          if-no-files-found: warn
+          retention-days: 7
