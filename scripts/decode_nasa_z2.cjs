@@ -11,14 +11,16 @@ if(found!==expected)throw Error('NASA Z-2 original SHA256 does not match inspect
 fs.mkdirSync(out,{recursive:true});
 let factory=require(path.resolve(decoderPath));
 if(typeof factory!=='function'){
- // Three.js 0.180 includes a browser-global decoder without CommonJS export.
- // Evaluate the pinned local decoder source in an isolated Node VM only.
- const vm=require('node:vm');
- const scope={module:{exports:{}},exports:{},console,process,Buffer,
-   WebAssembly,TextDecoder,TextEncoder,setTimeout,clearTimeout};
- vm.runInNewContext(fs.readFileSync(decoderPath,'utf8')+
-   '\n;module.exports = DracoDecoderModule;',scope,{timeout:30000});
- factory=scope.module.exports;
+ // The Three.js Emscripten decoder uses CommonJS require internally but
+ // exposes its factory as a top-level browser variable. Re-compile the trusted,
+ // pinned local decoder with Node's own CommonJS wrapper and expose that symbol.
+ const Module=require('node:module');
+ const loaded=new Module(path.resolve(decoderPath),module);
+ loaded.filename=path.resolve(decoderPath);
+ loaded.paths=module.paths;
+ loaded._compile(fs.readFileSync(decoderPath,'utf8')+
+   '\n;module.exports = DracoDecoderModule;',loaded.filename);
+ factory=loaded.exports;
 }
 if(typeof factory!=='function')throw Error('Local Three.js Draco decoder does not expose a factory');
 (async()=>{
