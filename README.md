@@ -68,15 +68,16 @@ cd Mars-EVA-Navigator
 python -m pip install -r requirements.txt
 ```
 
-### 2. Configure a compatible Jezero DEM
+### 2. Download and configure the real Jezero CTX DEM
 
-Download a suitable Jezero GeoTIFF from the original data provider. In PowerShell, set the path to the file on your computer:
+The checked-in `jezero_dem_precomputed.json` contains a real USGS CTX crop for the static app. For the Python backend, download and validate the native 20 m/pixel product and set its path in PowerShell:
 
 ```powershell
-$env:MARS_DEM_PATH = "C:\path\to\jezero_hirise_dtm.tif"
+python scripts/prepare_dem.py --download ctx --export-json
+$env:MARS_DEM_PATH = (Resolve-Path ./jezero_ctx_dtm_20m.tif).Path
 ```
 
-Alternatively, place the compatible GeoTIFF alongside `mars_dem_server.py`. Providing `MARS_DEM_PATH` is more reliable if the file lives elsewhere.
+On Bash, use `export MARS_DEM_PATH="$PWD/jezero_ctx_dtm_20m.tif"`. [.env.example](.env.example) documents the same setting; Python does not automatically load dotenv files. Keep the downloaded `.tif.provenance.json` next to the GeoTIFF. The downloader first tries the requested USGS host, then the public mirror linked by USGS, and pins the reviewed CTX SHA-256.
 
 ### 3. Start the server
 
@@ -93,13 +94,13 @@ You can also check:
 - [Server status](http://127.0.0.1:8000/api/status)
 - [Processed elevation grid](http://127.0.0.1:8000/api/dem/jezero?size=40)
 
-A successful status check only shows that a file was detected; a successful elevation request confirms that the server processed terrain data.
+`/api/status` now validates the raster, scans its physical elevations, checks provenance when present and processes a grid. Check both `dem_validated` and `provenance_verified`; an arbitrary local file is not labelled as verified USGS data.
 
 ## Static GitHub Pages deployment
 
 The root [index.html](index.html) redirects to the interactive application. GitHub Pages serves the frontend only; it does not execute the Python backend. A real terrain-dependent route requires a loaded Mars DEM. The app does not substitute invented heights when DEM coverage is unavailable.
 
-Enable GitHub Pages under **Settings → Pages → Deploy from a branch → main / (root)** after merging.
+The existing science-release workflow builds a separate 440×440 regional export for deployment. Enable **Settings → Pages → Source: GitHub Actions**; see the release workflow and `docs/SCIENTIFIC_EVIDENCE.md`. The checked-in 220×220 study crop remains available for direct static hosting and regression tests.
 
 ## Mission GENESIS — verified science release
 
@@ -146,15 +147,25 @@ python scripts/prepare_dem.py --input 'C:\path\to\jezero_dem.tif' --export-json
 python scripts/prepare_dem.py --download ctx --export-json
 ```
 
-The utility validates the Martian CRS and exports `jezero_dem_precomputed.json` from **actual sampled elevations** using the Python DEM endpoint's processing logic. It defaults to a 220×220 subset near Jezero's sample route. Review coverage, source provenance, source permissions, and grid resolution before committing the resulting JSON for GitHub Pages. No actual DEM export is included in this commit.
+The utility validates the Martian CRS and exports `jezero_dem_precomputed.json` from **actual sampled elevations** using the Python DEM endpoint's processing logic. The committed 220×220 crop covers 77.390–77.475°E, 18.425–18.475°N, with 48,400 valid heights and retained USGS/NASA attribution. NoData is represented as JSON `null`, never a fabricated zero or filled plateau. Cropped static data cannot claim the full GeoTIFF's coverage.
 
-For the local backend, set `MARS_DEM_PATH` to the downloaded GeoTIFF and run `python mars_dem_server.py`. The static 220×220 grid is only a coarse planning representation; it cannot prove subcell obstacles are absent.
+The original CTX spacing is **20×20 m in the map projection**. The static grid samples approximately **21.72×13.47 m on the Mars sphere**; interpolation does not create finer scientific detail. For the local backend, set `MARS_DEM_PATH` and run `python mars_dem_server.py`. See [Jezero DEM validation, sources and HiRISE evaluation](docs/jezero-dem.md) and the [recorded HTTP verification](docs/jezero-dem-verification.json).
+
+With the server running, independently compare the HTTP result with native GeoTIFF pixels and the static export:
+
+```sh
+python scripts/verify_dem.py
+```
 
 ## Automated regression tests
 
-Tests use a tiny **synthetic test-only raster** to validate DEM handling and error responses. No test heights are represented as measured Martian terrain.
+Isolated error/NoData tests use tiny **synthetic test-only rasters** in temporary directories. The JavaScript routing suite also loads the committed **real CTX export**, runs the actual EVA planner and makes any procedural terrain call fail the test. An optional Python integration test reads the downloaded real source. Test fixtures are never installed as application data.
 
 ```powershell
+python -m unittest discover -s tests -v
+node --test tests/*.test.cjs
+# Optional real GeoTIFF test (PowerShell)
+$env:MARS_DEM_TEST_PATH = (Resolve-Path ./jezero_ctx_dtm_20m.tif).Path
 python -m unittest discover -s tests -v
 ```
 

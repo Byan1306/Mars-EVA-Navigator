@@ -56,7 +56,7 @@ For publishing, GitHub Actions runs:
 
 ```bash
 python scripts/prepare_dem.py --download ctx --export-json \
-  --bbox 77.1605 18.211 77.699 18.7212 --size 440 \
+  --bbox 77.1605 18.2111 77.6989 18.7211 --size 440 \
   --output jezero_dem_precomputed.json
 python scripts/verify_static_dem.py jezero_dem_precomputed.json
 python scripts/build_static_site.py --dem jezero_dem_precomputed.json --output _site

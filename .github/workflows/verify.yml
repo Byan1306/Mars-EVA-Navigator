@@ -25,7 +25,7 @@ jobs:
         run: |
           node --check curiosity_explorer.js
           node --check curiosity_360_renderer.js
-          node --test tests/curiosity.test.cjs tests/curiosity-mission-control.test.cjs
+          node --test tests/*.test.cjs
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
       - name: Check Python compilation

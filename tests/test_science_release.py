@@ -79,7 +79,12 @@ class ReleaseTests(unittest.TestCase):
             output.headers = {"Content-Length": str(len(output.getvalue()))}
             return output
 
-        with patch("scripts.prepare_dem.urlopen", mocked_urlopen):
+        # This is a transport/provenance unit test, not a scientific raster.
+        # Keep production checksum/GeoTIFF validation strict; the separate real
+        # CTX test exercises it against the downloaded official bytes.
+        with patch("scripts.prepare_dem.urlopen", mocked_urlopen), patch(
+            "scripts.prepare_dem.check_product", side_effect=lambda path, source: sha256_file(path)
+        ):
             path = download_dataset("ctx", destination)
         self.assertEqual(path, destination)
         self.assertEqual(len(calls), 2)
