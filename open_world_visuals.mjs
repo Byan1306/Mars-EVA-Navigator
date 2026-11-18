@@ -120,7 +120,10 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
     .then(async manifest=>{
       if(!manifest || manifest.publisher!=='NASA' ||
           !String(manifest.source_url||'').includes('nasa/NASA-3D-Resources')) return;
-      const gltf=await loader.loadAsync('./assets/astronaut_z2_anatomical_206.glb');
+      const [gltf,humanWalk]=await Promise.all([
+        loader.loadAsync('./assets/astronaut_z2_anatomical_206.glb'),
+        fetch('./mocap/cmu_walk_human_v6.json').then(r=>r.ok?r.json():null).catch(()=>null)
+      ]);
       const root=gltf.scene;
       const bounds=new THREE.Box3().setFromObject(root);
       const ext=bounds.getSize(new THREE.Vector3());
@@ -139,14 +142,14 @@ export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
       modelRoot=root;
       modelController=createAstronautMotion({THREE,root,gltf,
         sampleGround:(x,z)=>{const h=core.sample(dem,x,z);return h===null?null:h-dem.ref;},
-        quality:'balanced'});
+        quality:'balanced',mocap:humanWalk});
       root.traverse(object=>{
         if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}
       });
-      modelState='NASA Z-2 / rig anatómico educativo (206 huesos + IK)';
+      modelState='NASA Z-2 / 206 huesos + marcha humana registrada (CMU)';
       document.body.dataset.astronaut='nasa-z2-anatomical-206';
       const evidence=document.getElementById('visualEvidence');
-      if(evidence)evidence.textContent='NASA Z-2: geometría auténtica, rig anatómico de 206 huesos (80 axial, 126 apendicular) y animación educativos. No es marcha EVA certificada.';
+      if(evidence)evidence.textContent='NASA Z-2: geometría auténtica, rig anatómico de 206 huesos (80 axial, 126 apendicular) y marcha capturada de una persona (CMU), adaptada al traje. No es marcha EVA certificada.';
     })
     .catch(err=>{
       console.warn('Modelo NASA no disponible: se conserva astronauta 3D de respaldo.',err);

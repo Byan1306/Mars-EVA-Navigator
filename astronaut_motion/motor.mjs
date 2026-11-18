@@ -5,7 +5,7 @@ import {advancePhase,clamp,lerp,raisedFoot,smoothstep,solveLegIK} from './math.m
 import {motionQuality} from './quality.mjs';
 import {createTerrainSampler} from './terrain_adapter.mjs';
 import {createMotionMetrics} from './metrics.mjs';
-export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='balanced'}){
+export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='balanced',mocap=null}){
  const skins=[];root.traverse(n=>{if(n.isSkinnedMesh)skins.push(n)});
  if(!skins.length)throw Error('NASA Z2 must be a SkinnedMesh');
  const bones=skins[0].skeleton.bones;
@@ -22,16 +22,36 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
   }
  }
  if(!actions.idle||!actions.walk||!actions.fast_walk)throw Error('Missing educational gait clips');
+
+ function loadRecordedHumanMotion(data){
+   if(!data || data.format!=='MarsEVA-CMU-HumanWalk-v1' ||
+      !Array.isArray(data.tracks) || data.tracks.length<18 ||
+      !Array.isArray(data.times) || data.times.length<40)return null;
+   const times=Float32Array.from(data.times),tracks=[];
+   if(Math.abs(times[times.length-1]-data.duration_seconds)>.0001)return null;
+   for(const t of data.tracks){
+     if(!byName[t.bone]||t.quats?.length!==times.length*4)return null;
+     tracks.push(new THREE.QuaternionKeyframeTrack(t.bone+'.quaternion',times,Float32Array.from(t.quats)));
+   }
+   if(data.root_sway_xy?.length!==times.length*2)return null;
+   const clip=new THREE.AnimationClip('CMU_human_walk',data.duration_seconds,tracks);
+   return {action:mixer.clipAction(clip).play(),data,times};
+ }
+ const recorded=loadRecordedHumanMotion(mocap);
+ if(recorded)recorded.action.setEffectiveWeight(0);
+ const torso=byName.Sacrum,torsoRest=torso.position.clone();
  const terrain=createTerrainSampler(sampleGround),metrics=createMotionMetrics();
  const feet=[{side:-1,upper:byName.L_Femur,lower:byName.L_Tibia,foot:byName.L_Tarsal_Talus},
   {side:1,upper:byName.R_Femur,lower:byName.R_Tibia,foot:byName.R_Tarsal_Talus}]
   .map(f=>({...f,lock:new THREE.Vector3(),begin:new THREE.Vector3(),
    end:new THREE.Vector3(),target:new THREE.Vector3(),neutral:new THREE.Vector3(),
-   hasLock:false,swing:false,planted:true}));
+   hasLock:false,swing:false,planted:true,
+   priorHip:new THREE.Quaternion(),priorKnee:new THREE.Quaternion(),
+   priorFoot:new THREE.Quaternion(),sole:new THREE.Vector3()}));
  const v=new THREE.Vector3(),temp=new THREE.Vector3(),scale=new THREE.Vector3();
  const inverse=new THREE.Matrix4();
  let phase=0,speed=0,lastX=NaN,lastZ=NaN,ikAccum=0,updates=0;
- let mode='idle',lastFacing=null,turnRate=0,slipCorrections=0,qualityName=quality;
+ let mode='idle',lastFacing=null,turnRate=0,slipCorrections=0,qualityName=quality,source='procedural';
  function neutral(leg,out=leg.neutral){
   v.set(leg.side*.212,.10,-.07);
   out.copy(root.localToWorld(v));return out;
@@ -74,15 +94,28 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
   if(distance>Math.max(2.4,4*dt*5)){reset();dx=0;dz=0;distance=0}
   lastX=player.x;lastZ=player.z;
   const velocity=fly?0:clamp(distance/dt,0,3.8);
-  speed=lerp(speed,velocity,1-Math.exp(-dt*7));
+  speed=lerp(speed,velocity,1-Math.exp(-dt*6));
   mode=fly||speed<.17?'idle':speed>1.9?'fast_walk':'walk';
-  if(!fly&&mode!=='idle')phase=advancePhase(phase,distance,mode==='fast_walk'?.95:.72);
+  if(!fly&&mode!=='idle')phase=advancePhase(phase,distance,recorded?1.46:(mode==='fast_walk'?.95:.72));
+  const humanBlend=recorded?clamp((speed-.07)/.8,0,1):0;
   for(const [name,action] of Object.entries(actions)){
-   const wanted=name===mode?1:0;
-   action.setEffectiveWeight(lerp(action.getEffectiveWeight(),wanted,1-Math.exp(-dt*9)));
+   const wanted=recorded?(name==='idle'?1-humanBlend:0):(name===mode?1:0);
+   action.setEffectiveWeight(lerp(action.getEffectiveWeight(),wanted,1-Math.exp(-dt*11)));
    action.setEffectiveTimeScale(name==='idle'?1:clamp(speed/(name==='walk'?1.45:2.5),.3,1.8));
   }
   mixer.update(dt);
+  if(recorded){
+   source='CMU human motion capture 02_01';
+   recorded.action.setEffectiveWeight(lerp(recorded.action.getEffectiveWeight(),humanBlend,1-Math.exp(-dt*11)));
+   recorded.action.time=phase/(Math.PI*2)*recorded.data.duration_seconds;
+   mixer.update(0);
+   const sway=recorded.data.root_sway_xy;
+   const a=phase/(Math.PI*2)*(recorded.times.length-1),i=Math.floor(a);
+   const frac=a-i,j=Math.min(i+1,recorded.times.length-1),o=i*2,p=j*2;
+   const weight=recorded.action.getEffectiveWeight();
+   torso.position.set(torsoRest.x+lerp(sway[o],sway[p],frac)*weight,
+      torsoRest.y+lerp(sway[o+1],sway[p+1],frac)*weight,torsoRest.z);
+  }else{source='procedural fallback'}
   if(Number.isFinite(player.yaw)){
    if(lastFacing!==null){
     const change=Math.atan2(Math.sin(player.yaw-lastFacing),Math.cos(player.yaw-lastFacing));
@@ -138,13 +171,34 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
      corrected++;slipCorrections++;
     }
     const normal=terrain.normal(foot.target.x,foot.target.z);
-    if(solveFoot(foot,foot.target,normal)){solves++;updates++}
+    if(recorded){
+      // Preserve captured stance, swing, arm counter-rotation and knee flexion.
+      // The ground IK acts only as a bounded secondary planted-foot correction.
+      if(!foot.planted)continue;
+      foot.priorHip.copy(foot.upper.quaternion);
+      foot.priorKnee.copy(foot.lower.quaternion);
+      foot.priorFoot.copy(foot.foot.quaternion);
+      foot.foot.getWorldPosition(foot.sole);
+      const error=foot.sole.distanceTo(foot.target);
+      const mix=clamp((error-.045)/.20,0,.34);
+      if(mix<.01)continue;
+      if(solveFoot(foot,foot.target,normal)){
+        foot.upper.quaternion.copy(foot.priorHip).slerp(foot.upper.quaternion,mix);
+        foot.lower.quaternion.copy(foot.priorKnee).slerp(foot.lower.quaternion,mix);
+        foot.foot.quaternion.copy(foot.priorFoot).slerp(foot.foot.quaternion,mix);
+        solves++;updates++;
+      }
+    }else if(solveFoot(foot,foot.target,normal)){solves++;updates++}
    }
   }
   const stats=metrics.tick(dt,solves,corrected);
   if(typeof document!=='undefined'&&document.body){
    const data=document.body.dataset;
    data.astronautMotion=mode;
+   data.astronautAnimationSource=source;
+   data.astronautMocapTracks=String(recorded?.data.tracks.length||0);
+   data.astronautMocapDuration=String(recorded?.data.duration_seconds||0);
+   data.astronautHumanPose=byName.L_Femur.rotation.x.toFixed(4)+':'+byName.R_Femur.rotation.x.toFixed(4);
    data.astronautIkSolves=String(updates);
    data.astronautBones=String(bones.length);
    data.astronautRigged='true';
@@ -154,10 +208,10 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
    data.astronautIkHz=String(cfg.ikHz);
    data.astronautFpsSample=String(stats.fps);
   }
-  return {mode,speedMps:speed,ikSolves:updates,slipCorrections,fpsSample:stats.fps};
+  return {mode,speedMps:speed,ikSolves:updates,slipCorrections,fpsSample:stats.fps,source};
  }
  function getState(){return {mode,speedMps:speed,ikSolves:updates,
-  slipCorrections,quality:qualityName,boneCount:bones.length,metrics:metrics.read()}}
+  slipCorrections,quality:qualityName,boneCount:bones.length,source,metrics:metrics.read()}}
  function dispose(){mixer.stopAllAction();mixer.uncacheRoot(root)}
  return {update,reset,dispose,getState};
 }

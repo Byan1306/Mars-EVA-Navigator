@@ -2,7 +2,7 @@ name: Unified NASA science + 206-bone anatomical Z2 astronaut
 
 on:
   push:
-    branches: [feature/mars-eva-unified-motion-science, feature/astronaut-anatomical-206, feature/astronaut-motion-genesis-v5]
+    branches: [feature/mars-eva-unified-motion-science, feature/astronaut-anatomical-206, feature/astronaut-motion-genesis-v5, feature/astronaut-human-mocap-v6]
   pull_request:
     branches: [feature/jezero-60km-named-region, feature/mars-eva-unified-motion-science]
   workflow_dispatch:
@@ -84,6 +84,26 @@ jobs:
           PY
       - name: Independently verify 206 adult bones and GPU skinning
         run: python scripts/verify_anatomy206.py assets/astronaut_z2_anatomical_206.glb
+      - name: Retarget actual CMU human-walking recording for Z2
+        run: |
+          python -m pip install --no-deps 'scipy==1.16.3'
+          python scripts/retarget_cmu_walk.py mocap/cmu/02_01_walk_original.zip mocap/cmu_walk_human_v6.json
+          python - <<'PY'
+          import json,math
+          from pathlib import Path
+          p=Path('mocap/cmu_walk_human_v6.json')
+          obj=json.loads(p.read_text())
+          assert obj['format']=='MarsEVA-CMU-HumanWalk-v1'
+          assert len(obj['tracks'])==20
+          assert len(obj['times'])==66
+          assert all(len(t['quats'])==66*4 for t in obj['tracks'])
+          for track in obj['tracks']:
+           for a in range(0,len(track['quats']),4):
+            q=track['quats'][a:a+4]
+            assert abs(sum(x*x for x in q)-1)<.00008
+          assert p.stat().st_size<250000
+          print('20 genuine recorded-human joint rotation tracks verified, original BVH hash pinned')
+          PY
       - name: Build standalone offline web app with Astra validated CTX
         run: |
           python scripts/build_static_site.py \
@@ -93,6 +113,25 @@ jobs:
         id: browser
         timeout-minutes: 5
         run: node tests/unified-browser.test.cjs
+      - name: Convert recorded-human Chrome frames into an actual motion preview GIF
+        if: success()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          source=Path('motion_evidence/human_walk_frames')
+          pictures=sorted(source.glob('human_*.png'))
+          if len(pictures)<6:raise RuntimeError('Not enough observed walking frames')
+          frames=[]
+          for photo in pictures:
+           im=Image.open(photo).convert('RGB')
+           im.thumbnail((960,600))
+           frames.append(im)
+          frames[0].save('motion_evidence/NASA-Z2-REAL-HUMAN-MOCAP-WALK.gif',
+             save_all=True,append_images=frames[1:],duration=170,loop=0,
+             optimize=True)
+          print('Captured real Chrome walking animation:',len(frames),'frames')
+          PY
       - name: Publish completed runnable Windows-compatible website
         uses: actions/upload-artifact@v4
         with:
@@ -113,6 +152,9 @@ jobs:
             scripts/build_motion_asset.py
             scripts/anatomy206.py
             scripts/verify_anatomy206.py
+            scripts/retarget_cmu_walk.py
+            mocap/cmu/02_01_walk_original.zip
+            docs/HUMAN_WALK_V6.md
             scripts/build_static_site.py
             tests/test_dem.py
             tests/test_prepare_dem.py
