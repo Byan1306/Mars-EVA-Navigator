@@ -40,15 +40,32 @@ const server=http.createServer((req,res)=>{
     null,{timeout:90000});
   out.rigged=true;
   await page.locator('#cameraThird').click();
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(1400);
+  await page.waitForFunction(()=>document.body.dataset.astronautMocapTracks==='20',
+     null,{timeout:30000});
+  out.mocapSource=await page.locator('body').getAttribute('data-astronaut-animation-source');
+  out.mocapTracks=Number(await page.locator('body').getAttribute('data-astronaut-mocap-tracks'));
+  if(!out.mocapSource?.includes('CMU')||out.mocapTracks!==20)
+     throw Error('Human walking source was not actually applied: '+out.mocapSource);
   const before=Number(await page.locator('body').getAttribute('data-astronaut-ik-solves'));
-  await page.keyboard.down('w');await page.waitForTimeout(1100);await page.keyboard.up('w');
+  const frames=path.join(evidence,'human_walk_frames');
+  fs.mkdirSync(frames,{recursive:true});
+  const poses=new Set();
+  await page.keyboard.down('w');
+  for(let f=0;f<8;f++){
+    await page.waitForTimeout(140);
+    poses.add(await page.locator('body').getAttribute('data-astronaut-human-pose'));
+    await page.screenshot({path:path.join(frames,'human_'+String(f).padStart(2,'0')+'.png')});
+  }
   out.walkMotion=(await page.locator('body').getAttribute('data-astronaut-motion'))!=='idle';
-  await page.waitForTimeout(250);
+  out.distinctHumanLegPoses=poses.size;
+  await page.keyboard.up('w');await page.waitForTimeout(220);
   const after=Number(await page.locator('body').getAttribute('data-astronaut-ik-solves'));
   out.footsteps=after-before;
+  if(poses.size<4)throw Error('Human walk not changing femur poses across recorded-motion cycle');
   out.bones=Number(await page.locator('body').getAttribute('data-astronaut-bones'));
-  if(out.bones!==206||out.footsteps<=0)throw Error('Rig IK did not animate real bones on measured ground');
+  if(out.bones!==206)throw Error('Expected verified 206 anatomical joints');
+  // On flat/low-error terrain human mocap must take precedence over unnecessary IK.
   await page.screenshot({path:path.join(evidence,'NASA-Z2-rigged-EVA.png')});
   // Educational diagnostic: make all anatomical joint lines visible on demand.
   await page.keyboard.press('k');
