@@ -4,7 +4,7 @@
  */
 import {GLTFLoader} from './vendor/loaders/GLTFLoader.js';
 import {DRACOLoader} from './vendor/loaders/DRACOLoader.js';
-import {createAstronautMotion} from './astronaut_motion.mjs';
+import {createAstronautMotion} from './astronaut_motion/motor.mjs';
 
 export function createCinematicLayer({THREE,scene,core,dem,renderer,notify}) {
   const clamp=(a,b,c)=>Math.min(c,Math.max(b,a));
