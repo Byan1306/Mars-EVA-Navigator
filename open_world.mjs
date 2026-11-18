@@ -285,7 +285,7 @@ function updateHud() {
     (d.astronautBones+' huesos · '+(d.astronautMotion||'idle')+' · '+
     'velocidad '+(d.astronautGaitSpeed||'0')+' m/s · '+
     'FPS observados '+(d.astronautFpsSample||'—')+' · '+
-    'IK '+(d.astronautIkHz||'—')+' Hz · correcciones '+(d.astronautSlipCorrections||'0')):
+    'IK '+(d.astronautIkHz||'—')+' Hz · mocap '+(d.astronautMocapTracks||'0')+' huesos · correcciones '+(d.astronautSlipCorrections||'0')):
     'Esperando traje NASA Z-2 articulado · K: esqueleto';
   }
 }
