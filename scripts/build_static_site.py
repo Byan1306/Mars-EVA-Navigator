@@ -42,6 +42,14 @@ def build(output: Path, dem: Path) -> None:
         if not path.is_file():
             raise FileNotFoundError(f"Missing public asset: {name}")
         shutil.copy2(path, output / name)
+    # Explicit, auditable Motion Genesis submodule allowlist only.
+    motion_dir = output / "astronaut_motion"
+    motion_dir.mkdir(exist_ok=True)
+    for name in ("motor.mjs", "math.mjs", "quality.mjs", "terrain_adapter.mjs", "metrics.mjs"):
+        origin = ROOT / "astronaut_motion" / name
+        if not origin.is_file():
+            raise FileNotFoundError(f"Missing verified motion source: {name}")
+        shutil.copy2(origin, motion_dir / name)
     # Bundle Three.js locally: no CDN is needed at runtime.
     three = ROOT / "node_modules" / "three" / "build" / "three.module.js"
     if not three.is_file():

@@ -278,6 +278,16 @@ function updateHud() {
   $('elev').textContent=h===null?'NO DATA':Math.round(h).toLocaleString('es-CR')+' m';
   $('slope').textContent=degrees===null?'NO DATA':degrees.toFixed(1)+'°';
   drawMinimap();
+  const telemetry=$('motionStats');
+  if(telemetry){
+   const d=document.body.dataset;
+   telemetry.textContent=d.astronautRigged==='true'?
+    (d.astronautBones+' huesos · '+(d.astronautMotion||'idle')+' · '+
+    'velocidad '+(d.astronautGaitSpeed||'0')+' m/s · '+
+    'FPS observados '+(d.astronautFpsSample||'—')+' · '+
+    'IK '+(d.astronautIkHz||'—')+' Hz · correcciones '+(d.astronautSlipCorrections||'0')):
+    'Esperando traje NASA Z-2 articulado · K: esqueleto';
+  }
 }
 function frame() {
   if(!loaded)return;

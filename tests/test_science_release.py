@@ -62,7 +62,7 @@ class ReleaseTests(unittest.TestCase):
         build(target, self.dataset)
         self.assertEqual(
             {p.name for p in target.iterdir()},
-            set(PUBLIC_FILES) | {"jezero_dem_precomputed.json", "vendor"} |
+            set(PUBLIC_FILES) | {"jezero_dem_precomputed.json", "vendor", "astronaut_motion"} |
             ({"assets"} if (target / "assets").exists() else set())
         )
         self.assertFalse((target / "catalog.sqlite").exists())
