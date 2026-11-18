@@ -50,6 +50,13 @@ def build(output: Path, dem: Path) -> None:
         if not origin.is_file():
             raise FileNotFoundError(f"Missing verified motion source: {name}")
         shutil.copy2(origin, motion_dir / name)
+    # Only the converted, provenance-pinned walking clip is public. The
+    # original CMU BVH ZIP remains in source control for independent audit.
+    mocap = ROOT / 'mocap' / 'cmu_walk_human_v6.json'
+    if mocap.is_file():
+        directory = output / 'mocap'
+        directory.mkdir(exist_ok=True)
+        shutil.copy2(mocap, directory / mocap.name)
     # Bundle Three.js locally: no CDN is needed at runtime.
     three = ROOT / "node_modules" / "three" / "build" / "three.module.js"
     if not three.is_file():
