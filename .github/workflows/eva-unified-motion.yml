@@ -2,7 +2,7 @@ name: Unified NASA science + 206-bone anatomical Z2 astronaut
 
 on:
   push:
-    branches: [feature/mars-eva-unified-motion-science, feature/astronaut-anatomical-206]
+    branches: [feature/mars-eva-unified-motion-science, feature/astronaut-anatomical-206, feature/astronaut-motion-genesis-v5]
   pull_request:
     branches: [feature/jezero-60km-named-region, feature/mars-eva-unified-motion-science]
   workflow_dispatch:
@@ -40,6 +40,13 @@ jobs:
           node --check scripts/decode_nasa_z2.cjs
           node --check tests/unified-browser.test.cjs
           python scripts/verify_static_dem.py jezero_dem_precomputed.json
+      - name: Check Motion Genesis modules and deterministic grounded IK tests
+        run: |
+          node --check astronaut_motion/motor.mjs
+          node --check astronaut_motion/math.mjs
+          node --check astronaut_motion/metrics.mjs
+          node --check astronaut_motion/terrain_adapter.mjs
+          node --test tests/motion-genesis.test.mjs
       - name: Run combined scientific planner, Curiosity and terrain regression
         run: |
           python -m unittest discover -s tests -v
@@ -111,6 +118,13 @@ jobs:
             tests/test_prepare_dem.py
             tests/dem-routing.test.cjs
             tests/unified-browser.test.cjs
+            tests/motion-genesis.test.mjs
+            astronaut_motion/motor.mjs
+            astronaut_motion/math.mjs
+            astronaut_motion/quality.mjs
+            astronaut_motion/metrics.mjs
+            astronaut_motion/terrain_adapter.mjs
+            docs/MOTION_GENESIS_V5.md
             docs/ANATOMY_206.md
             docs/jezero-dem.md
             docs/jezero-dem-verification.json
