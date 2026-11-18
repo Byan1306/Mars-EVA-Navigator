@@ -1,0 +1,32 @@
+name: Inspect official CMU walking capture (one-time)
+on:
+  push:
+    branches: [feature/astronaut-human-mocap-v6]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extract-cmu-bvh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate human motion source and extract BVH for offline retargeting
+        run: |
+          python - <<'PY'
+          import zipfile,hashlib,shutil
+          from pathlib import Path
+          src=Path('mocap/cmu/02_01_walk_original.zip')
+          with zipfile.ZipFile(src) as z:
+           names=[n for n in z.namelist() if n.lower().endswith('.bvh')]
+           if len(names)!=1: raise ValueError('Expected one official original BVH walking clip')
+           raw=z.read(names[0])
+           if not raw.lstrip().startswith(b'HIERARCHY'): raise ValueError('Not a valid CMU BVH')
+           Path('mocap/cmu/02_01.bvh').write_bytes(raw)
+           print('CMU source:',names[0],len(raw),'bytes BVH, SHA-256',hashlib.sha256(raw).hexdigest())
+           print(raw[:8500].decode(errors='replace'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CMU_02_01_Human_Walking_Original_BVH
+          path: mocap/cmu/02_01.bvh
+          retention-days: 7
