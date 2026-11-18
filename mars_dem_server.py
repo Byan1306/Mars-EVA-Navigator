@@ -324,6 +324,14 @@ def original_eva_planner():
     return FileResponse(BASE_DIR / HTML_NAME, media_type='text/html')
 
 
+@app.get('/mocap/cmu_walk_human_v6.json', include_in_schema=False)
+def recorded_human_walk_json():
+    path = BASE_DIR / 'mocap' / 'cmu_walk_human_v6.json'
+    if not path.is_file():
+        raise HTTPException(404, 'CMU human movement conversion is unavailable.')
+    return FileResponse(path, media_type='application/json')
+
+
 @app.get('/astronaut_motion/{module_name}.mjs', include_in_schema=False)
 def motion_genesis_public_module(module_name: str):
     approved = {'motor', 'math', 'quality', 'terrain_adapter', 'metrics'}
