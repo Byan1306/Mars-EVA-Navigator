@@ -324,6 +324,17 @@ def original_eva_planner():
     return FileResponse(BASE_DIR / HTML_NAME, media_type='text/html')
 
 
+@app.get('/astronaut_motion/{module_name}.mjs', include_in_schema=False)
+def motion_genesis_public_module(module_name: str):
+    approved = {'motor', 'math', 'quality', 'terrain_adapter', 'metrics'}
+    if module_name not in approved:
+        raise HTTPException(404, 'Unsupported public animation module.')
+    path = BASE_DIR / 'astronaut_motion' / (module_name + '.mjs')
+    if not path.is_file():
+        raise HTTPException(404, 'This animation module has not been installed.')
+    return FileResponse(path, media_type='text/javascript')
+
+
 @app.get('/astronaut_motion.mjs', include_in_schema=False)
 def motion_genesis_controller():
     path = BASE_DIR / 'astronaut_motion.mjs'
