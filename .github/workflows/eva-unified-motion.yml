@@ -113,6 +113,25 @@ jobs:
         id: browser
         timeout-minutes: 5
         run: node tests/unified-browser.test.cjs
+      - name: Convert recorded-human Chrome frames into an actual motion preview GIF
+        if: success()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          source=Path('motion_evidence/human_walk_frames')
+          pictures=sorted(source.glob('human_*.png'))
+          if len(pictures)<6:raise RuntimeError('Not enough observed walking frames')
+          frames=[]
+          for photo in pictures:
+           im=Image.open(photo).convert('RGB')
+           im.thumbnail((960,600))
+           frames.append(im)
+          frames[0].save('motion_evidence/NASA-Z2-REAL-HUMAN-MOCAP-WALK.gif',
+             save_all=True,append_images=frames[1:],duration=170,loop=0,
+             optimize=True)
+          print('Captured real Chrome walking animation:',len(frames),'frames')
+          PY
       - name: Publish completed runnable Windows-compatible website
         uses: actions/upload-artifact@v4
         with:
