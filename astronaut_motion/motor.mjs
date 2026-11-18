@@ -198,6 +198,7 @@ export function createAstronautMotion({THREE,root,gltf,sampleGround,quality='bal
    data.astronautAnimationSource=source;
    data.astronautMocapTracks=String(recorded?.data.tracks.length||0);
    data.astronautMocapDuration=String(recorded?.data.duration_seconds||0);
+   data.astronautHumanPose=byName.L_Femur.rotation.x.toFixed(4)+':'+byName.R_Femur.rotation.x.toFixed(4);
    data.astronautIkSolves=String(updates);
    data.astronautBones=String(bones.length);
    data.astronautRigged='true';
